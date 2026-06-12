@@ -1,0 +1,11 @@
+--- Components/Pages/Home.razor
++++ Components/Pages/Home.razor
+@@ -375,7 +375,7 @@
+                                              Name="@target"
+                                              SeriesType="@CurrentSeriesType"
+                                              XValue="@(e => e.Date)"
+-                                             YValue="@(e => !e.HasData ? (_chartType == ChartDisplayType.Bar ? 0 : null) : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 2) : e.Count))" />
++                                             YValue="@(e => !e.HasData ? 0 : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 2) : e.Count))" />
+                             
+                             if (_showIntensity)
+                             {
