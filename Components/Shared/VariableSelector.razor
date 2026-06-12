@@ -1,0 +1,192 @@
+@using MudBlazor
+@using PsychDashboard.ViewModels
+
+<MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid #e0e0e0; border-radius: 8px;">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #424242;">
+            <MudIcon Icon="@Icons.Material.Filled.Tune" Size="MudBlazor.Size.Small" Class="mr-1" />
+            Variables
+        </MudText>
+
+        @foreach (var target in AvailableTargets)
+        {
+            var targetState = GetTargetState(target);
+            <MudStack Spacing="0">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-1">
+                    <MudCheckBox T="bool"
+                                 Value="targetState.Visible"
+                                 ValueChanged="@((bool val) => OnTargetVisibilityChanged(target, val))"
+                                 Dense="true"
+                                 Size="MudBlazor.Size.Small"
+                                 Color="MudBlazor.Color.Primary" />
+                    <MudText Typo="Typo.body2" Style="flex: 1; font-weight: 500;">@target</MudText>
+                    <input type="color"
+                           value="@targetState.Color"
+                           @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))"
+                           style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                    @if (HasSubcategories(target))
+                    {
+                        <MudIconButton Icon="@(targetState.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                       Size="MudBlazor.Size.Small"
+                                       OnClick="@(() => ToggleExpanded(target))" />
+                    }
+                </MudStack>
+
+                @if (targetState.Expanded && HasSubcategories(target))
+                {
+                    <MudStack Spacing="0" Class="ml-6">
+                        @foreach (var subcat in GetSubcategories(target))
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-0">
+                                <MudCheckBox T="bool"
+                                             Value="@IsSubcategoryVisible(target, subcat)"
+                                             ValueChanged="@((bool val) => OnSubcategoryVisibilityChanged(target, subcat, val))"
+                                             Dense="true"
+                                             Size="MudBlazor.Size.Small"
+                                             Color="MudBlazor.Color.Secondary" />
+                                <MudText Typo="Typo.caption">@subcat</MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+            </MudStack>
+        }
+
+        <MudDivider Class="my-1" />
+
+        <MudText Typo="Typo.caption" Style="font-weight: 600; color: #616161;">Overlays</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudCheckBox T="bool" Value="ShowIntensity" ValueChanged="OnShowIntensityChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Warning" />
+            <MudText Typo="Typo.caption">Intensity</MudText>
+        </MudStack>
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudCheckBox T="bool" Value="ShowDuration" ValueChanged="OnShowDurationChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Info" />
+            <MudText Typo="Typo.caption">Duration</MudText>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public List<string> AvailableTargets { get; set; } = new();
+    [Parameter] public Dictionary<string, List<string>> AvailableSubcategories { get; set; } = new();
+    [Parameter] public EventCallback OnStateChanged { get; set; }
+
+    [Parameter] public bool ShowIntensity { get; set; }
+    [Parameter] public EventCallback<bool> ShowIntensityChanged { get; set; }
+    [Parameter] public bool ShowDuration { get; set; }
+    [Parameter] public EventCallback<bool> ShowDurationChanged { get; set; }
+
+    // Default color palette for targets (fallback)
+    private static readonly string[] DefaultColors = new[]
+    {
+        "#2196F3", "#4CAF50", "#00BCD4", "#3F51B5", "#8BC34A",
+        "#CDDC39", "#009688", "#03A9F4", "#673AB7", "#FFEB3B"
+    };
+
+    // Fixed color mapping for specific behaviors
+    private static readonly Dictionary<string, string> FixedColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Aggression", "#F44336" },            // Red
+        { "Disruptive", "#FF9800" },            // Orange
+        { "Self-injury", "#9C27B0" },           // Purple
+        { "Self-Mutilation", "#E91E63" },       // Pink
+        { "Property Destruction", "#795548" },  // Brown
+        { "Elopement", "#607D8B" }              // Blue Grey
+    };
+
+    public class TargetState
+    {
+        public bool Visible { get; set; } = true;
+        public bool Expanded { get; set; } = false;
+        public string Color { get; set; } = "#2196F3";
+        public HashSet<string> HiddenSubcategories { get; set; } = new();
+    }
+
+    private Dictionary<string, TargetState> _targetStates = new();
+
+    public TargetState GetTargetState(string target)
+    {
+        if (!_targetStates.ContainsKey(target))
+        {
+            string color;
+            if (FixedColors.TryGetValue(target, out var fixedColor))
+            {
+                color = fixedColor;
+            }
+            else
+            {
+                var index = AvailableTargets.IndexOf(target);
+                color = DefaultColors[Math.Max(0, index) % DefaultColors.Length];
+            }
+
+            _targetStates[target] = new TargetState
+            {
+                Color = color
+            };
+        }
+        return _targetStates[target];
+    }
+
+    public bool IsTargetVisible(string target) => GetTargetState(target).Visible;
+    public string GetTargetColor(string target) => GetTargetState(target).Color;
+
+    public HashSet<string> GetVisibleTargets()
+    {
+        return AvailableTargets.Where(t => IsTargetVisible(t)).ToHashSet();
+    }
+
+    public Dictionary<string, string> GetColorMap()
+    {
+        return AvailableTargets.ToDictionary(t => t, t => GetTargetColor(t));
+    }
+
+    private bool HasSubcategories(string target) =>
+        AvailableSubcategories.ContainsKey(target) && AvailableSubcategories[target].Any();
+
+    private List<string> GetSubcategories(string target) =>
+        AvailableSubcategories.ContainsKey(target) ? AvailableSubcategories[target] : new();
+
+    private bool IsSubcategoryVisible(string target, string subcat)
+    {
+        var state = GetTargetState(target);
+        return !state.HiddenSubcategories.Contains(subcat);
+    }
+
+    private async Task OnTargetVisibilityChanged(string target, bool visible)
+    {
+        GetTargetState(target).Visible = visible;
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task OnColorChanged(string target, string color)
+    {
+        GetTargetState(target).Color = color;
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private void ToggleExpanded(string target)
+    {
+        var state = GetTargetState(target);
+        state.Expanded = !state.Expanded;
+    }
+
+    private async Task OnSubcategoryVisibilityChanged(string target, string subcat, bool visible)
+    {
+        var state = GetTargetState(target);
+        if (visible)
+            state.HiddenSubcategories.Remove(subcat);
+        else
+            state.HiddenSubcategories.Add(subcat);
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task OnShowIntensityChanged(bool val)
+    {
+        await ShowIntensityChanged.InvokeAsync(val);
+    }
+
+    private async Task OnShowDurationChanged(bool val)
+    {
+        await ShowDurationChanged.InvokeAsync(val);
+    }
+}

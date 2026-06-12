@@ -1,0 +1,87 @@
+@using MudBlazor
+@using PsychDashboard.ViewModels
+
+<MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid #e0e0e0; border-radius: 8px;">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #424242;">
+            <MudIcon Icon="@Icons.Material.Filled.Flag" Size="MudBlazor.Size.Small" Class="mr-1" />
+            Phase Changes
+        </MudText>
+
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudDatePicker @bind-Date="_newDate"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Placeholder="Date"
+                           Style="max-width: 140px; background: white;" />
+            <MudTextField @bind-Value="_newLabel"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Placeholder="Label"
+                          Style="max-width: 120px;" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                           Color="MudBlazor.Color.Primary"
+                           Size="MudBlazor.Size.Small"
+                           OnClick="AddIntervention"
+                           Disabled="@(_newDate == null || string.IsNullOrWhiteSpace(_newLabel))" />
+        </MudStack>
+
+        @if (Interventions.Any())
+        {
+            @foreach (var intervention in Interventions.OrderBy(i => i.Date))
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-0">
+                    <MudChip T="string"
+                             Size="MudBlazor.Size.Small"
+                             Style="@($"background-color: {intervention.Color}20; color: {intervention.Color}; border: 1px solid {intervention.Color};")"
+                             OnClose="@(() => RemoveIntervention(intervention))">
+                        @intervention.Date.ToString("MMM dd") — @intervention.Label
+                    </MudChip>
+                </MudStack>
+            }
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Style="color: #9e9e9e; font-style: italic;">
+                No interventions added
+            </MudText>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public List<InterventionDate> Interventions { get; set; } = new();
+    [Parameter] public EventCallback<List<InterventionDate>> InterventionsChanged { get; set; }
+
+    private DateTime? _newDate;
+    private string _newLabel = "";
+
+    private static readonly string[] PhaseColors = new[]
+    {
+        "#FF5722", "#9C27B0", "#009688", "#FF9800", "#3F51B5", "#E91E63"
+    };
+
+    private async Task AddIntervention()
+    {
+        if (_newDate == null || string.IsNullOrWhiteSpace(_newLabel)) return;
+
+        var intervention = new InterventionDate
+        {
+            Date = _newDate.Value,
+            Label = _newLabel.Trim(),
+            Color = PhaseColors[Interventions.Count % PhaseColors.Length]
+        };
+
+        Interventions.Add(intervention);
+        _newDate = null;
+        _newLabel = "";
+
+        await InterventionsChanged.InvokeAsync(Interventions);
+    }
+
+    private async Task RemoveIntervention(InterventionDate intervention)
+    {
+        Interventions.Remove(intervention);
+        await InterventionsChanged.InvokeAsync(Interventions);
+    }
+}
