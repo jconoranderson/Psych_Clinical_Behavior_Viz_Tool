@@ -1,6 +1,16 @@
 # Psych Clinical Behavior Viz Tool
 
-A Blazor Server application designed specifically for psychology and clinical staff to assess changes in behavior over time, and to analyze how those behaviors are affected by medications and other clinical factors.
+## Overview
+
+The Psych Clinical Behavior Viz Tool is an advanced, Blazor-based analytical dashboard engineered specifically for psychology professionals and clinical staff. It is designed to ingest and translate highly complex, multidimensional behavioral datasets into actionable, intuitive visualizations.
+
+In modern clinical environments, patient data is vast and multifaceted. This tool bridges the gap between raw data storage and clinical insight by interfacing directly with an underlying SQL data warehouse. It synthesizes longitudinal patient data to empower clinicians to:
+- Monitor granular changes in patient behavior over extended periods of time.
+- Correlate behavioral shifts with medical interventions, including complex medication regimens and dosage adjustments.
+- Identify patterns and anomalies across various clinical factors to support evidence-based, personalized treatment plans.
+- Navigate rigorous user requirements for data accuracy, temporal precision, and clear clinical presentation.
+
+By transforming dense relational data into interactive visual insights, the tool significantly reduces the cognitive load on clinical staff and facilitates more informed, data-driven psychological assessments.
 
 ## Features
 
