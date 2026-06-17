@@ -1,6 +1,6 @@
 # Psych Clinical Behavior Viz Tool
 
-A Blazor Server application designed to visualize behavioral and clinical data for psychology assessments.
+A Blazor Server application designed specifically for psychology and clinical staff to assess changes in behavior over time, and to analyze how those behaviors are affected by medications and other clinical factors.
 
 ## Features
 
