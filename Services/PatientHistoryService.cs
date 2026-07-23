@@ -25,7 +25,9 @@ namespace PsychDashboard.Services
         public async Task<DashboardViewModel> GetPatientHistoryAsync(
             AggregationPeriod period = AggregationPeriod.Day,
             HashSet<string>? selectedShifts = null,
-            string? selectedResident = null)
+            string? selectedResident = null,
+            DateTime? filterStartDate = null,
+            DateTime? filterEndDate = null)
         {
             var viewModel = new DashboardViewModel();
             
@@ -106,9 +108,9 @@ namespace PsychDashboard.Services
                 // Group and aggregate
                 List<DailyBehaviorCount> grouped = period switch
                 {
-                    AggregationPeriod.Shift => AggregateByShift(filteredRecords),
+                    
                     AggregationPeriod.Day => AggregateByDay(filteredRecords),
-                    AggregationPeriod.Weekday => AggregateByWeekday(filteredRecords),
+                    
                     AggregationPeriod.Week => AggregateByWeek(filteredRecords),
                     AggregationPeriod.Month => AggregateByMonth(filteredRecords),
                     _ => AggregateByDay(filteredRecords)
@@ -172,6 +174,39 @@ namespace PsychDashboard.Services
                         }
                     }
                 }
+                
+                // Add the newly parsed Excel medications to the pool
+                if (viewModel.Medications != null)
+                {
+                    foreach (var med in viewModel.Medications)
+                    {
+                        if (!string.IsNullOrEmpty(med.Name) && double.TryParse(med.Dose, out double parsedDose))
+                        {
+                            availableMeds.Add(med.Name);
+                            
+                            var startDate = med.StartDate.Date;
+                            var endDate = med.EndDate.Date;
+                            
+                            if (startDate > endDate) continue;
+                            
+                            var days = (endDate - startDate).TotalDays;
+                            if (days > 3650) days = 3650;
+                            
+                            for (int i = 0; i <= days; i++)
+                            {
+                                var currentDate = startDate.AddDays(i);
+                                dailyMeds.Add(new DailyMedication
+                                {
+                                    Date = currentDate,
+                                    Name = med.Name,
+                                    Dose = parsedDose,
+                                    Unit = "",
+                                    LogDose = Math.Log10(parsedDose + 1)
+                                });
+                            }
+                        }
+                    }
+                }
 
                 var groupedMeds = dailyMeds
                     .GroupBy(m => new { m.Name, m.Date })
@@ -206,43 +241,20 @@ namespace PsychDashboard.Services
 
                 viewModel.DailyMedications = filteredMeds.OrderBy(m => m.Date).ToList();
                 viewModel.UnreducedMedications = groupedMeds;
-                viewModel.AvailableMedications = availableMeds.OrderBy(m => m).ToList();
+                
+                // Sort AvailableMedications descending by maximum historical dose
+                viewModel.AvailableMedications = availableMeds
+                    .OrderByDescending(m => {
+                        var medDoses = viewModel.DailyMedications.Where(x => x.Name == m).ToList();
+                        return medDoses.Any() ? medDoses.Max(x => x.Dose) : 0;
+                    })
+                    .ToList();
             }
 
             return await Task.FromResult(viewModel);
         }
 
         #region Aggregation Methods
-
-        private List<DailyBehaviorCount> AggregateByShift(List<BehaviorCsvRow> records)
-        {
-            return records
-                .GroupBy(r => new { Date = r.Date!.Value.Date, Shift = GetShift(r.Time), Target = r.Target ?? "Unknown" })
-                .Select(g =>
-                {
-                    var buckets = AggregateBuckets(g);
-                    return new DailyBehaviorCount
-                    {
-                        Date = g.Key.Date.AddHours(GetShiftOffset(g.Key.Shift)),
-                        Label = $"{g.Key.Date:MMM dd}: '{g.Key.Shift}' Shift",
-                        BehaviorType = g.Key.Shift,
-                        Target = g.Key.Target,
-                        Count = (int)g.Sum(x => x.Episode_Count ?? 0),
-                        Rate = g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() > 0 
-                            ? (double)g.Sum(x => x.Episode_Count ?? 0) / g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() 
-                            : 0,
-                        AverageIntensity = g.Where(x => ComputeWeightedIntensity(x) > 0).Any()
-                            ? g.Where(x => ComputeWeightedIntensity(x) > 0).Average(x => ComputeWeightedIntensity(x))
-                            : 0,
-                        TotalDuration = g.Sum(x => ComputeTotalDuration(x)),
-                        Subcategories = g.SelectMany(x => ParseSubcategories(x.Subcategory)).Distinct().ToList(),
-                        IntensityBuckets = buckets.intensity,
-                        DurationBuckets = buckets.duration
-                    };
-                })
-                .OrderBy(x => x.Date)
-                .ToList();
-        }
 
         private List<DailyBehaviorCount> AggregateByDay(List<BehaviorCsvRow> records)
         {
@@ -258,12 +270,10 @@ namespace PsychDashboard.Services
                         BehaviorType = "All",
                         Target = g.Key.Target,
                         Count = (int)g.Sum(x => x.Episode_Count ?? 0),
-                        Rate = g.Where(x => x.Behavior_LOA != true).Select(r => GetShift(r.Time)).Distinct().Count() > 0 
-                            ? (double)g.Sum(x => x.Episode_Count ?? 0) / g.Where(x => x.Behavior_LOA != true).Select(r => GetShift(r.Time)).Distinct().Count() 
+                        Rate = g.Where(x => x.Episode_Count.HasValue).Any()
+                            ? g.Where(x => x.Episode_Count.HasValue).Average(x => x.Episode_Count.Value)
                             : 0,
-                        AverageIntensity = g.Where(x => ComputeWeightedIntensity(x) > 0).Any()
-                            ? g.Where(x => ComputeWeightedIntensity(x) > 0).Average(x => ComputeWeightedIntensity(x))
-                            : 0,
+                        AverageIntensity = ComputeGroupAverageIntensity(g),
                         TotalDuration = g.Sum(x => ComputeTotalDuration(x)),
                         Subcategories = g.SelectMany(x => ParseSubcategories(x.Subcategory)).Distinct().ToList(),
                         IntensityBuckets = AggregateBuckets(g).intensity,
@@ -274,37 +284,43 @@ namespace PsychDashboard.Services
                 .ToList();
         }
 
-        private List<DailyBehaviorCount> AggregateByWeekday(List<BehaviorCsvRow> records)
+        
+
+        private List<DailyBehaviorCount> AggregateByAverage(List<BehaviorCsvRow> records)
         {
-            // Same as Day but excludes Saturday and Sunday
+            if (!records.Any()) return new List<DailyBehaviorCount>();
+            
+            var minDate = records.Min(r => r.Date!.Value.Date);
+            var maxDate = records.Max(r => r.Date!.Value.Date);
+            var totalDays = (maxDate - minDate).TotalDays + 1;
+            if (totalDays <= 0) totalDays = 1;
+
             return records
-                .Where(r => r.Date!.Value.DayOfWeek != DayOfWeek.Saturday && r.Date!.Value.DayOfWeek != DayOfWeek.Sunday)
-                .GroupBy(r => new { Date = r.Date!.Value.Date, Target = r.Target ?? "Unknown" })
+                .GroupBy(r => new { Target = r.Target ?? "Unknown" })
                 .Select(g =>
                 {
-                    var shiftCount = g.Select(r => GetShift(r.Time)).Distinct().Count();
                     return new DailyBehaviorCount
                     {
-                        Date = g.Key.Date,
-                        Label = $"{g.Key.Date:ddd MMM dd}",
-                        BehaviorType = "Weekday",
+                        Date = minDate, // Align to the start of the timeframe
+                        Label = $"Overall Average",
+                        BehaviorType = "All",
                         Target = g.Key.Target,
-                        Count = (int)g.Sum(x => x.Episode_Count ?? 0),
-                        Rate = g.Where(x => x.Behavior_LOA != true).Select(r => GetShift(r.Time)).Distinct().Count() > 0 
-                            ? (double)g.Sum(x => x.Episode_Count ?? 0) / g.Where(x => x.Behavior_LOA != true).Select(r => GetShift(r.Time)).Distinct().Count() 
+                        Count = (int)g.Sum(x => x.Episode_Count ?? 0), // Total count over the period
+                        Rate = g.Where(x => x.Episode_Count.HasValue).Any()
+                            ? g.Where(x => x.Episode_Count.HasValue).Average(x => x.Episode_Count.Value)
                             : 0,
-                        AverageIntensity = g.Where(x => ComputeWeightedIntensity(x) > 0).Any()
-                            ? g.Where(x => ComputeWeightedIntensity(x) > 0).Average(x => ComputeWeightedIntensity(x))
-                            : 0,
-                        TotalDuration = g.Sum(x => ComputeTotalDuration(x)),
+                        AverageIntensity = ComputeGroupAverageIntensity(g),
+                        TotalDuration = g.Sum(x => ComputeTotalDuration(x)) / totalDays, // Daily average duration
                         Subcategories = g.SelectMany(x => ParseSubcategories(x.Subcategory)).Distinct().ToList(),
                         IntensityBuckets = AggregateBuckets(g).intensity,
                         DurationBuckets = AggregateBuckets(g).duration
                     };
                 })
-                .OrderBy(x => x.Date)
+                .OrderBy(x => x.Target)
                 .ToList();
         }
+
+        
 
         private List<DailyBehaviorCount> AggregateByWeek(List<BehaviorCsvRow> records)
         {
@@ -325,12 +341,10 @@ namespace PsychDashboard.Services
                         BehaviorType = $"Week {g.Key.Week}",
                         Target = g.Key.Target,
                         Count = (int)g.Sum(x => x.Episode_Count ?? 0),
-                        Rate = g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() > 0 
-                            ? (double)g.Sum(x => x.Episode_Count ?? 0) / g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() 
+                        Rate = g.Where(x => x.Episode_Count.HasValue).Any()
+                            ? g.Where(x => x.Episode_Count.HasValue).Average(x => x.Episode_Count.Value)
                             : 0,
-                        AverageIntensity = g.Where(x => ComputeWeightedIntensity(x) > 0).Any()
-                            ? g.Where(x => ComputeWeightedIntensity(x) > 0).Average(x => ComputeWeightedIntensity(x))
-                            : 0,
+                        AverageIntensity = ComputeGroupAverageIntensity(g),
                         TotalDuration = g.Sum(x => ComputeTotalDuration(x)),
                         Subcategories = g.SelectMany(x => ParseSubcategories(x.Subcategory)).Distinct().ToList(),
                         IntensityBuckets = AggregateBuckets(g).intensity,
@@ -355,12 +369,10 @@ namespace PsychDashboard.Services
                         BehaviorType = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(g.Key.Month),
                         Target = g.Key.Target,
                         Count = (int)g.Sum(x => x.Episode_Count ?? 0),
-                        Rate = g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() > 0 
-                            ? (double)g.Sum(x => x.Episode_Count ?? 0) / g.Where(x => x.Behavior_LOA != true).Select(r => new { r.Date!.Value.Date, Shift = GetShift(r.Time) }).Distinct().Count() 
+                        Rate = g.Where(x => x.Episode_Count.HasValue).Any()
+                            ? g.Where(x => x.Episode_Count.HasValue).Average(x => x.Episode_Count.Value)
                             : 0,
-                        AverageIntensity = g.Where(x => ComputeWeightedIntensity(x) > 0).Any()
-                            ? g.Where(x => ComputeWeightedIntensity(x) > 0).Average(x => ComputeWeightedIntensity(x))
-                            : 0,
+                        AverageIntensity = ComputeGroupAverageIntensity(g),
                         TotalDuration = g.Sum(x => ComputeTotalDuration(x)),
                         Subcategories = g.SelectMany(x => ParseSubcategories(x.Subcategory)).Distinct().ToList(),
                         IntensityBuckets = AggregateBuckets(g).intensity,
@@ -425,28 +437,22 @@ namespace PsychDashboard.Services
         }
 
         /// <summary>
-        /// Computes weighted average intensity from Intensity_01 through Intensity_05 counts.
-        /// Intensity levels: 1=minimal, 2=mild, 3=moderate, 4=severe, 5=extreme
+        /// Computes weighted average intensity across a group, correctly weighting episodes.
+        /// Intensity levels: 1=Minimal, 2=Mild, 3=Moderate, 4=Severe, 5=Extreme.
+        /// Ignores Intensity_01 which is "Not Specified".
         /// </summary>
-        private double ComputeWeightedIntensity(BehaviorCsvRow row)
+        private double ComputeGroupAverageIntensity(IEnumerable<BehaviorCsvRow> group)
         {
             double totalWeight = 0;
             double totalCount = 0;
 
-            void Add(double? count, int level)
+            foreach (var row in group)
             {
-                if (count.HasValue && count.Value > 0)
-                {
-                    totalWeight += count.Value * level;
-                    totalCount += count.Value;
-                }
+                if (row.Intensity_02_Count.HasValue && row.Intensity_02_Count.Value > 0) { totalWeight += row.Intensity_02_Count.Value * 1; totalCount += row.Intensity_02_Count.Value; }
+                if (row.Intensity_03_Count.HasValue && row.Intensity_03_Count.Value > 0) { totalWeight += row.Intensity_03_Count.Value * 2; totalCount += row.Intensity_03_Count.Value; }
+                if (row.Intensity_04_Count.HasValue && row.Intensity_04_Count.Value > 0) { totalWeight += row.Intensity_04_Count.Value * 3; totalCount += row.Intensity_04_Count.Value; }
+                if (row.Intensity_05_Count.HasValue && row.Intensity_05_Count.Value > 0) { totalWeight += row.Intensity_05_Count.Value * 4; totalCount += row.Intensity_05_Count.Value; }
             }
-
-            Add(row.Intensity_01_Count, 1);
-            Add(row.Intensity_02_Count, 2);
-            Add(row.Intensity_03_Count, 3);
-            Add(row.Intensity_04_Count, 4);
-            Add(row.Intensity_05_Count, 5);
 
             return totalCount > 0 ? totalWeight / totalCount : 0;
         }
@@ -475,11 +481,12 @@ namespace PsychDashboard.Services
             var duration = new double[6];
             foreach (var r in rows)
             {
-                intensity[0] += r.Intensity_01_Count ?? 0;
-                intensity[1] += r.Intensity_02_Count ?? 0;
-                intensity[2] += r.Intensity_03_Count ?? 0;
-                intensity[3] += r.Intensity_04_Count ?? 0;
-                intensity[4] += r.Intensity_05_Count ?? 0;
+                // Shift intensities down by 1 because Intensity_01 is "Not Specified"
+                intensity[0] += r.Intensity_02_Count ?? 0;
+                intensity[1] += r.Intensity_03_Count ?? 0;
+                intensity[2] += r.Intensity_04_Count ?? 0;
+                intensity[3] += r.Intensity_05_Count ?? 0;
+                // intensity[4] would be Intensity_06 if it existed
                 duration[0] += r.Duration_01_Count ?? 0;
                 duration[1] += r.Duration_02_Count ?? 0;
                 duration[2] += r.Duration_03_Count ?? 0;

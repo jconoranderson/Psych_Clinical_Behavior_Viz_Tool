@@ -8,6 +8,7 @@ namespace PsychDashboard.ViewModels
     {
         public List<DailyBehaviorCount> DailyBehaviorCounts { get; set; } = new();
         public List<PsychDashboard.Services.PatientHistoryService.BehaviorCsvRow> UnreducedBehaviorCounts { get; set; } = new();
+        public List<PsychDashboard.Models.Medication> Medications { get; set; } = new();
         public List<DailyMedication> DailyMedications { get; set; } = new();
         public List<DailyMedication> UnreducedMedications { get; set; } = new();
         public List<MissingDataRange> MissingDataRanges { get; set; } = new();

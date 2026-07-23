@@ -10,6 +10,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 builder.Services.AddSingleton<PatientHistoryService>();
+builder.Services.AddSingleton<ExcelParsingService>();
 
 var app = builder.Build();
 

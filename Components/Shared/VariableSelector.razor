@@ -15,11 +15,15 @@
                 <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-1">
                     <MudCheckBox T="bool"
                                  Value="targetState.Visible"
-                                 ValueChanged="@((bool val) => OnTargetVisibilityChanged(target, val))"
+                                 ValueChanged="@((bool val) => ToggleTargetVisibility(target, val))"
                                  Dense="true"
                                  Size="MudBlazor.Size.Small"
                                  Color="MudBlazor.Color.Primary" />
-                    <MudText Typo="Typo.body2" Style="flex: 1; font-weight: 500;">@target</MudText>
+                    <MudText Typo="Typo.body2" Style="flex: 1; font-weight: 500; cursor: pointer; user-select: none;"
+                             @onclick="@(() => ToggleTargetVisibility(target, !targetState.Visible))"
+                             @ondblclick="@(() => IsolateTarget(target))">
+                        @target
+                    </MudText>
                     <input type="color"
                            value="@targetState.Color"
                            @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))"
@@ -57,24 +61,67 @@
         <MudText Typo="Typo.caption" Style="font-weight: 600; color: #616161;">Overlays</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center">
             <MudCheckBox T="bool" Value="ShowIntensity" ValueChanged="OnShowIntensityChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Warning" />
-            <MudText Typo="Typo.caption">Intensity</MudText>
+            <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;" @onclick="@(() => OnShowIntensityChanged(!ShowIntensity))">Intensity</MudText>
         </MudStack>
         <MudStack Row="true" AlignItems="AlignItems.Center">
             <MudCheckBox T="bool" Value="ShowDuration" ValueChanged="OnShowDurationChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Info" />
-            <MudText Typo="Typo.caption">Duration</MudText>
+            <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;" @onclick="@(() => OnShowDurationChanged(!ShowDuration))">Duration</MudText>
         </MudStack>
+
+        @if (AvailableMedications.Any())
+        {
+            <MudDivider Class="my-1" />
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #424242; flex: 1;">
+                    <MudIcon Icon="@Icons.Material.Filled.Medication" Size="MudBlazor.Size.Small" Class="mr-1" />
+                    Medications
+                </MudText>
+                <MudSwitch T="bool" Value="ShowMedications" ValueChanged="OnShowMedicationsChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" />
+            </MudStack>
+            
+            @if (ShowMedications)
+            {
+                <MudStack Spacing="0" Class="ml-2">
+                    @foreach (var med in AvailableMedications)
+                    {
+                        var isVisible = IsMedicationVisible(med);
+                        var medColor = GetMedicationColor(med);
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-1">
+                            <MudCheckBox T="bool"
+                                         Value="isVisible"
+                                         ValueChanged="@((bool val) => OnMedicationVisibilityChanged(med, val))"
+                                         Dense="true"
+                                         Size="MudBlazor.Size.Small"
+                                         Color="MudBlazor.Color.Secondary" />
+                            <MudText Typo="Typo.body2" Style="flex: 1; font-weight: 500; font-size: 0.8rem; cursor: pointer; user-select: none;"
+                                     @onclick="@(() => OnMedicationVisibilityChanged(med, !isVisible))"
+                                     @ondblclick="@(() => IsolateMedication(med))">
+                                @med
+                            </MudText>
+                            <input type="color"
+                                   value="@medColor"
+                                   @onchange="@((ChangeEventArgs e) => OnMedicationColorChanged(med, e.Value?.ToString() ?? "#3e2723"))"
+                                   style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                        </MudStack>
+                    }
+                </MudStack>
+            }
+        }
     </MudStack>
 </MudPaper>
 
 @code {
     [Parameter] public List<string> AvailableTargets { get; set; } = new();
     [Parameter] public Dictionary<string, List<string>> AvailableSubcategories { get; set; } = new();
+    [Parameter] public List<string> AvailableMedications { get; set; } = new();
     [Parameter] public EventCallback OnStateChanged { get; set; }
 
     [Parameter] public bool ShowIntensity { get; set; }
     [Parameter] public EventCallback<bool> ShowIntensityChanged { get; set; }
     [Parameter] public bool ShowDuration { get; set; }
     [Parameter] public EventCallback<bool> ShowDurationChanged { get; set; }
+    [Parameter] public bool ShowMedications { get; set; }
+    [Parameter] public EventCallback<bool> ShowMedicationsChanged { get; set; }
 
     // Default color palette for targets (fallback)
     private static readonly string[] DefaultColors = new[]
@@ -87,7 +134,7 @@
     private static readonly Dictionary<string, string> FixedColors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Aggression", "#F44336" },            // Red
-        { "Disruptive", "#FF9800" },            // Orange
+        { "Disruptive Behaviors", "#FF9800" },  // Orange
         { "Self-injury", "#9C27B0" },           // Purple
         { "Self-Mutilation", "#E91E63" },       // Pink
         { "Property Destruction", "#795548" },  // Brown
@@ -140,6 +187,31 @@
         return AvailableTargets.ToDictionary(t => t, t => GetTargetColor(t));
     }
 
+    // Medication State
+    private HashSet<string> _hiddenMedications = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _medicationColors = new(StringComparer.OrdinalIgnoreCase);
+    private string[] DarkColors = new[] { "#1A237E", "#b71c1c", "#1b5e20", "#e65100", "#3e2723", "#4a148c", "#263238" };
+
+    public string GetMedicationColor(string med)
+    {
+        if (!_medicationColors.ContainsKey(med))
+        {
+            var index = AvailableMedications.IndexOf(med);
+            _medicationColors[med] = DarkColors[Math.Max(0, index) % DarkColors.Length];
+        }
+        return _medicationColors[med];
+    }
+
+    public bool IsMedicationVisible(string med)
+    {
+        return !_hiddenMedications.Contains(med);
+    }
+
+    public HashSet<string> GetVisibleMedications()
+    {
+        return AvailableMedications.Where(m => IsMedicationVisible(m)).ToHashSet();
+    }
+
     private bool HasSubcategories(string target) =>
         AvailableSubcategories.ContainsKey(target) && AvailableSubcategories[target].Any();
 
@@ -152,7 +224,7 @@
         return !state.HiddenSubcategories.Contains(subcat);
     }
 
-    private async Task OnTargetVisibilityChanged(string target, bool visible)
+    public async Task ToggleTargetVisibility(string target, bool visible)
     {
         GetTargetState(target).Visible = visible;
         await OnStateChanged.InvokeAsync();
@@ -188,5 +260,68 @@
     private async Task OnShowDurationChanged(bool val)
     {
         await ShowDurationChanged.InvokeAsync(val);
+    }
+
+    private async Task OnShowMedicationsChanged(bool val)
+    {
+        await ShowMedicationsChanged.InvokeAsync(val);
+    }
+
+    private async Task OnMedicationVisibilityChanged(string med, bool visible)
+    {
+        if (visible)
+            _hiddenMedications.Remove(med);
+        else
+            _hiddenMedications.Add(med);
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task OnMedicationColorChanged(string med, string color)
+    {
+        _medicationColors[med] = color;
+        await OnStateChanged.InvokeAsync();
+    }
+
+    public async Task IsolateTarget(string targetToIsolate)
+    {
+        // First check if it's already the ONLY one visible
+        var currentlyVisible = AvailableTargets.Where(t => IsTargetVisible(t)).ToList();
+        if (currentlyVisible.Count == 1 && currentlyVisible[0] == targetToIsolate)
+        {
+            // If it is already isolated, toggle everything back ON
+            foreach (var t in AvailableTargets)
+            {
+                GetTargetState(t).Visible = true;
+            }
+        }
+        else
+        {
+            // Otherwise, isolate it (turn others OFF)
+            foreach (var t in AvailableTargets)
+            {
+                GetTargetState(t).Visible = (t == targetToIsolate);
+            }
+        }
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task IsolateMedication(string medToIsolate)
+    {
+        var currentlyVisible = AvailableMedications.Where(m => IsMedicationVisible(m)).ToList();
+        if (currentlyVisible.Count == 1 && currentlyVisible[0] == medToIsolate)
+        {
+            _hiddenMedications.Clear();
+        }
+        else
+        {
+            foreach (var m in AvailableMedications)
+            {
+                if (m != medToIsolate)
+                    _hiddenMedications.Add(m);
+                else
+                    _hiddenMedications.Remove(m);
+            }
+        }
+        await OnStateChanged.InvokeAsync();
     }
 }
