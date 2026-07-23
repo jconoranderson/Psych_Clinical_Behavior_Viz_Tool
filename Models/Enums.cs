@@ -1,12 +1,11 @@
 namespace PsychDashboard.Models
 {
-    public enum AggregationPeriod
+            public enum AggregationPeriod
     {
-        Shift,
         Day,
-        Weekday,
         Week,
-        Month
+        Month,
+        Average
     }
 
     public enum YAxisMetric
