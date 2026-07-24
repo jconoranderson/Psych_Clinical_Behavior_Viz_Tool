@@ -164,7 +164,7 @@ namespace PsychDashboard.Services
             }
 
             // --- LOAD MEDICATION DATA ---
-            if (medRecords.Any())
+            if (medRecords.Any() || (viewModel.Medications != null && viewModel.Medications.Any()))
             {
 // Filter by selected resident
                 if (!string.IsNullOrEmpty(selectedResident))

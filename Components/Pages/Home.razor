@@ -807,6 +807,8 @@
     {
         _showMedications = val;
         BuildChartOptions();
+        StateHasChanged();
+        await Task.Delay(100);
         await RenderChart();
     }
 
