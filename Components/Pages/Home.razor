@@ -19,8 +19,8 @@
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
             <MudText Typo="Typo.body2" Style="font-weight: 600; color: #555;">Data Source:</MudText>
             <MudToggleGroup T="bool" SelectionMode="SelectionMode.SingleSelection" Value="_useDataWarehouse" ValueChanged="OnDataSourceChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" CheckMark="true" Style="background-color: #f5f5f5; border-radius: 4px;">
-                <MudToggleItem Value="true" Text="Data Warehouse" />
                 <MudToggleItem Value="false" Text="Local Workbook" />
+                <MudToggleItem Value="true" Text="Data Warehouse" />
             </MudToggleGroup>
         </MudStack>
         
@@ -654,7 +654,7 @@
     private bool _filtersOpen = true;
 
     // --- Data Source State ---
-    private bool _useDataWarehouse = true;
+    private bool _useDataWarehouse = false;
     private PsychDashboard.Services.ParsedWorkbookResult? _parsedWorkbook;
     private string _uploadMessage = "";
     private MudBlazor.Color _uploadMessageColor = MudBlazor.Color.Default;
@@ -903,9 +903,19 @@
         DateTime? filterStart = _selectedPeriod == AggregationPeriod.Average ? (_startDate ?? _dateRange?.Start) : null;
         DateTime? filterEnd = _selectedPeriod == AggregationPeriod.Average ? (_endDate ?? _dateRange?.End) : null;
         var hiddenSubcategories = _variableSelector?.GetHiddenSubcategories();
-        
-        if (!_useDataWarehouse && _parsedWorkbook != null)
+
+        if (!_useDataWarehouse)
         {
+            if (_parsedWorkbook == null)
+            {
+                _viewModel = new DashboardViewModel();
+                _selectedResident = null;
+                _startDate = null;
+                _endDate = null;
+                _dateRange = null;
+                return;
+            }
+
             _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
                 _selectedPeriod, shifts, filterStart, filterEnd, hiddenSubcategories);
@@ -920,7 +930,7 @@
             if (string.IsNullOrEmpty(_selectedResident) && _viewModel.AvailableResidents.Any())
             {
                 _selectedResident = _viewModel.AvailableResidents.First();
-                if (!_useDataWarehouse && _parsedWorkbook != null)
+                if (!_useDataWarehouse)
                 {
                     _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
