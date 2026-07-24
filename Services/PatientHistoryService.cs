@@ -23,31 +23,67 @@ namespace PsychDashboard.Services
         }
 
         public async Task<DashboardViewModel> GetPatientHistoryAsync(
-            AggregationPeriod period = AggregationPeriod.Day,
+            AggregationPeriod period, 
             HashSet<string>? selectedShifts = null,
             string? selectedResident = null,
-            DateTime? filterStartDate = null,
+            DateTime? filterStartDate = null, 
             DateTime? filterEndDate = null)
         {
-            var viewModel = new DashboardViewModel();
-            
-            // --- DATA PATH CONFIGURATION ---
-            // Update this path to point to your sensitive dataset.
+            var behaviorRecords = new List<BehaviorCsvRow>();
             var behaviorPath = "/Users/canderson/Python/behavior/data_out/behavior_recent.csv";
-            // --------------------------------
-
-            if (File.Exists(behaviorPath))
+            if (System.IO.File.Exists(behaviorPath))
             {
-                using var reader = new StreamReader(behaviorPath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                using var reader = new System.IO.StreamReader(behaviorPath);
+                using var csv = new CsvHelper.CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)
                 {
                     HeaderValidated = null,
                     MissingFieldFound = null
                 });
+                behaviorRecords = csv.GetRecords<BehaviorCsvRow>().ToList();
+            }
 
-                var records = csv.GetRecords<BehaviorCsvRow>().ToList();
+            var medRecords = new List<MedicationCsvRow>();
+            var medicationPath = "/Users/canderson/Python/medications_behavior_workbooks/data_out/meds_for_psych_vis_tool.csv";
+            if (System.IO.File.Exists(medicationPath))
+            {
+                using var reader = new System.IO.StreamReader(medicationPath);
+                using var csv = new CsvHelper.CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)
+                {
+                    HeaderValidated = null,
+                    MissingFieldFound = null
+                });
+                medRecords = csv.GetRecords<MedicationCsvRow>().ToList();
+            }
 
-                // Extract all unique resident IDs from the data.
+            return ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate);
+        }
+
+        public Task<DashboardViewModel> GetPatientHistoryFromRecordsAsync(
+            List<BehaviorCsvRow> behaviorRecords,
+            List<PsychDashboard.Models.Medication> medications,
+            AggregationPeriod period, 
+            HashSet<string>? selectedShifts = null,
+            DateTime? filterStartDate = null, 
+            DateTime? filterEndDate = null)
+        {
+            var viewModel = new DashboardViewModel();
+            viewModel.Medications = medications;
+            return Task.FromResult(ProcessRecords(viewModel, behaviorRecords, new List<MedicationCsvRow>(), period, selectedShifts, null, filterStartDate, filterEndDate));
+        }
+
+        private DashboardViewModel ProcessRecords(
+            DashboardViewModel viewModel,
+            List<BehaviorCsvRow> records,
+            List<MedicationCsvRow> medRecords,
+            AggregationPeriod period,
+            HashSet<string>? selectedShifts,
+            string? selectedResident,
+            DateTime? filterStartDate,
+            DateTime? filterEndDate)
+        {
+            if (records.Any())
+            {
+// Extract all unique resident IDs from the data.
                 // Prefer Person_ID; fall back to Name when Person_ID is absent.
                 viewModel.AvailableResidents = records
                     .Select(r => GetResidentKey(r))
@@ -121,19 +157,9 @@ namespace PsychDashboard.Services
             }
 
             // --- LOAD MEDICATION DATA ---
-            var medicationPath = "/Users/canderson/Python/medications_behavior_workbooks/data_out/meds_for_psych_vis_tool.csv";
-            if (File.Exists(medicationPath))
+            if (medRecords.Any())
             {
-                using var reader = new StreamReader(medicationPath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HeaderValidated = null,
-                    MissingFieldFound = null
-                });
-
-                var medRecords = csv.GetRecords<MedicationCsvRow>().ToList();
-
-                // Filter by selected resident
+// Filter by selected resident
                 if (!string.IsNullOrEmpty(selectedResident))
                 {
                     medRecords = medRecords.Where(r => r.Person_ID == selectedResident).ToList();
@@ -251,7 +277,7 @@ namespace PsychDashboard.Services
                     .ToList();
             }
 
-            return await Task.FromResult(viewModel);
+            return viewModel;
         }
 
         #region Aggregation Methods
