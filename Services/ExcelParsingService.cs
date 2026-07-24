@@ -373,13 +373,18 @@ namespace PsychDashboard.Services
                             }
                             else
                             {
-                                endDate = DateTime.Now; // Active to present
+                                endDate = results.Behaviors
+                                    .Where(behavior => behavior.Date.HasValue)
+                                    .Select(behavior => behavior.Date!.Value.Date)
+                                    .DefaultIfEmpty(startDate)
+                                    .Max();
                             }
 
                             results.Medications.Add(new PsychDashboard.Models.Medication
                             {
                                 Name = medName,
-                                Dose = dose.ToString(), // Or append unitStr?
+                                Dose = dose.ToString(),
+                                Unit = unitStr?.Trim() ?? "",
                                 StartDate = startDate,
                                 EndDate = endDate
                             });

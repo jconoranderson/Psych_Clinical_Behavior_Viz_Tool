@@ -8,10 +8,11 @@
 @inject PatientHistoryService PatientHistoryService
 @inject IJSRuntime JS
 @inject ExcelParsingService ExcelParsingService
+@inject ILoggerFactory LoggerFactory
 
-<MudAppBar Elevation="1" Style="background-color: white; padding-right: 24px;">
-    <MudImage Src="images/logo.png" Height="52" ObjectFit="ObjectFit.Contain" Class="mr-4" />
-    <MudText Typo="Typo.h5" Style="color: black; font-weight: 500;">Psychology Visualization Tool</MudText>
+<MudAppBar Elevation="0" Class="dashboard-header">
+    <MudImage Src="images/logo.png" Height="44" ObjectFit="ObjectFit.Contain" Class="mr-3" />
+    <MudText Typo="Typo.h6" Class="app-title">Psychology Visualization Tool</MudText>
     <MudSpacer />
     
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
@@ -39,10 +40,18 @@
     </MudStack>
 </MudAppBar>
 
-<MudGrid Spacing="2" Class="mt-1">
+<MudButton Variant="Variant.Outlined"
+           Size="MudBlazor.Size.Small"
+           StartIcon="@(_filtersOpen ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+           OnClick="@(() => _filtersOpen = !_filtersOpen)"
+           Class="mobile-filter-button">
+    @(_filtersOpen ? "Hide filters" : "Show filters")
+</MudButton>
+
+<MudGrid Spacing="2" Class="dashboard-grid">
 
     @* ===== LEFT SIDEBAR: Variable Selector + Interventions ===== *@
-    <MudItem xs="12" md="3" lg="2" Style="display: flex; flex-direction: column; max-height: calc(100vh - 120px); overflow-y: auto;">
+    <MudItem xs="12" md="3" lg="2" Class="@($"filters-sidebar {(_filtersOpen ? "" : "filters-collapsed")}")">
         <MudStack Spacing="3" Style="flex-grow: 1; min-height: 0;">
             @if (_viewModel != null)
             {
@@ -135,31 +144,39 @@
 
     @* ===== MAIN CHART AREA ===== *@
     <MudItem xs="12" md="9" lg="10" Style="display: flex; flex-direction: column; height: calc(100vh - 120px); min-height: 400px;">
-        <MudPaper Class="pa-3 d-flex flex-column" Elevation="1" Style="border-radius: 12px; flex-grow: 1;">
+        <MudPaper Class="pa-3 d-flex flex-column chart-card" Elevation="0">
             @* --- Toolbar Row 1: Title + Controls --- *@
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1">
-                <MudText Typo="Typo.h6" Style="font-weight: 600;">@_chartTitle</MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="chart-heading-row">
+                <div>
+                    <MudText Typo="Typo.overline" Class="chart-eyebrow">Behavior overview</MudText>
+                    <MudText Typo="Typo.h5" Class="chart-title">@_chartTitle</MudText>
+                </div>
 
-                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="view-actions">
                     @* Chart Type Toggle *@
-                    <MudToggleGroup T="ChartDisplayType" SelectionMode="SelectionMode.SingleSelection"
-                                    Value="_chartType" ValueChanged="OnChartTypeChanged"
-                                    Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small"
-                                    CheckMark="false" Class="d-flex">
-                        <MudToggleItem Value="ChartDisplayType.Line" Text="Line" />
-                        <MudToggleItem Value="ChartDisplayType.Bar" Text="Bar" />
-                    </MudToggleGroup>
+                    <div class="control-group">
+                        <span class="control-label">View</span>
+                        <MudToggleGroup T="ChartDisplayType" SelectionMode="SelectionMode.SingleSelection"
+                                        Value="_chartType" ValueChanged="OnChartTypeChanged"
+                                        Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small"
+                                        CheckMark="false" Class="d-flex">
+                            <MudToggleItem Value="ChartDisplayType.Line" Text="Line" />
+                            <MudToggleItem Value="ChartDisplayType.Bar" Text="Bar" />
+                        </MudToggleGroup>
+                    </div>
 
                     @* Y-Axis Metric Toggle *@
-                    <MudToggleGroup T="YAxisMetric" SelectionMode="SelectionMode.SingleSelection"
-                                    Value="_yAxisMetric" ValueChanged="OnYAxisMetricChanged"
-                                    Color="MudBlazor.Color.Dark" Size="MudBlazor.Size.Small"
-                                    CheckMark="false" Class="d-flex">
-                        <MudToggleItem Value="YAxisMetric.Frequency" Text="Frequency" />
-                        <MudToggleItem Value="YAxisMetric.Rate" Text="Rate" />
-                    </MudToggleGroup>
+                    <div class="control-group">
+                        <span class="control-label">Measure</span>
+                        <MudToggleGroup T="YAxisMetric" SelectionMode="SelectionMode.SingleSelection"
+                                        Value="_yAxisMetric" ValueChanged="OnYAxisMetricChanged"
+                                        Color="MudBlazor.Color.Dark" Size="MudBlazor.Size.Small"
+                                        CheckMark="false" Class="d-flex">
+                            <MudToggleItem Value="YAxisMetric.Frequency" Text="Frequency" />
+                            <MudToggleItem Value="YAxisMetric.Rate" Text="Rate" />
+                        </MudToggleGroup>
+                    </div>
 
-                    <MudDivider Vertical="true" FlexItem="true" Style="height: 24px;" />
                     <MudButton Variant="Variant.Outlined"
                                Size="MudBlazor.Size.Small"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
@@ -171,11 +188,11 @@
             </MudStack>
 
             @* --- Toolbar Row 2: Aggregation + Shifts | Overlays | ID Select + Dates --- *@
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1"
-                      Style="flex-wrap: nowrap; overflow-x: auto; gap: 16px;">
+            <div class="dashboard-toolbar">
 
                 @* LEFT: Aggregation period + shift chips *@
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <div class="control-group">
+                    <span class="control-label">Time grouping</span>
                     <MudToggleGroup T="AggregationPeriod" SelectionMode="SelectionMode.SingleSelection"
                                     Value="_selectedPeriod" ValueChanged="OnPeriodChanged"
                                     Color="MudBlazor.Color.Dark" Size="MudBlazor.Size.Small"
@@ -185,33 +202,42 @@
                         <MudToggleItem Value="AggregationPeriod.Month" Text="Month" />
                         <MudToggleItem Value="AggregationPeriod.Average" Text="Rolling" />
                     </MudToggleGroup>
+                </div>
+
+                <div class="control-group">
+                    <span class="control-label">Shifts</span>
                     <MudChipSet T="string" SelectionMode="SelectionMode.MultiSelection"
                                 SelectedValues="_selectedShifts"
                                 SelectedValuesChanged="OnShiftSelectionChanged"
                                 CheckMark="true" Color="MudBlazor.Color.Default" Variant="Variant.Outlined">
-                        <MudChip T="string" Value="@("7-3")" Size="MudBlazor.Size.Small" Default="true">7-3</MudChip>
-                        <MudChip T="string" Value="@("3-11")" Size="MudBlazor.Size.Small" Default="true">3-11</MudChip>
-                        <MudChip T="string" Value="@("11-7")" Size="MudBlazor.Size.Small" Default="true">11-7</MudChip>
+                        <MudChip T="string" Value="@("7-3")" Size="MudBlazor.Size.Small" Default="true">7–3</MudChip>
+                        <MudChip T="string" Value="@("3-11")" Size="MudBlazor.Size.Small" Default="true">3–11</MudChip>
+                        <MudChip T="string" Value="@("11-7")" Size="MudBlazor.Size.Small" Default="true">11–7</MudChip>
                     </MudChipSet>
                 </div>
 
                 @* CENTER: Medication + Missing Data Toggles *@
-                <div style="display: flex; align-items: center; gap: 16px;">
+                <div class="control-group overlays-group">
+                    <span class="control-label">Optional overlays</span>
+                    <div class="overlay-controls">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                         <MudSwitch T="bool" Value="_showMedications" ValueChanged="OnShowMedicationsChanged" Color="MudBlazor.Color.Info" Size="MudBlazor.Size.Small" />
-                        <MudText Typo="Typo.caption" Style="font-weight: 500; cursor: pointer;" @onclick="() => OnShowMedicationsChanged(!_showMedications)">Medication Overlay</MudText>
+                        <MudText Typo="Typo.caption" Class="toggle-label" @onclick="() => OnShowMedicationsChanged(!_showMedications)">Medication</MudText>
                     </MudStack>
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                         <MudSwitch T="bool" Value="_showMissingData" ValueChanged="OnMissingDataChanged" Color="MudBlazor.Color.Warning" Size="MudBlazor.Size.Small" />
-                        <MudText Typo="Typo.caption" Style="font-weight: 500; cursor: pointer;" @onclick="() => OnMissingDataChanged(!_showMissingData)">Missing Data Overlay</MudText>
+                        <MudText Typo="Typo.caption" Class="toggle-label" @onclick="() => OnMissingDataChanged(!_showMissingData)">Missing data</MudText>
                     </MudStack>
+                    </div>
                 </div>
 
                 @* RIGHT: ID select + date range — all native elements, same height *@
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <div class="control-group resident-group">
+                    <span class="control-label">Resident and date range</span>
+                    <div class="resident-date-controls">
                     @if (_viewModel?.AvailableResidents?.Any() == true)
                     {
-                        <div style="width: 170px;">
+                        <div class="resident-select">
                             <MudAutocomplete T="string"
                                              Value="_selectedResident"
                                              ValueChanged="OnResidentChanged"
@@ -245,8 +271,9 @@
                            @onchange="OnEndDateInputChanged"
                            style="height: 40px; padding: 0 10px; border: 1px solid #c4c4c4; border-radius: 4px;
                                   font-size: 0.875rem; background: white; color: #1a1a1a; cursor: pointer; outline: none;" />
+                    </div>
                 </div>
-            </MudStack>
+            </div>
 
             @* --- Chart --- *@
             @if (_viewModel == null)
@@ -327,11 +354,19 @@
                                                      XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
                                                      YValue="@(e => GetOverlayYValue(e, lvl, true))" />
                                 }
+                                <ApexPointSeries TItem="DailyBehaviorCount"
+                                                 Items="seriesData"
+                                                 Name="@($"{target} Intensity unavailable")"
+                                                 Group="@target"
+                                                 SeriesType="SeriesType.Bar"
+                                                 Color="@targetColor"
+                                                 XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
+                                                 YValue="@(e => GetOverlayUnknownYValue(e, true))" />
                             }
                             else if (_showDuration)
                             {
-                                var dGrad = GenerateGradient(targetColor, 5);
-                                @for (int i = 0; i < 5; i++)
+                                var dGrad = GenerateGradient(targetColor, 6);
+                                @for (int i = 0; i < 6; i++)
                                 {
                                     var lvl = i;
                                     <ApexPointSeries TItem="DailyBehaviorCount"
@@ -343,6 +378,14 @@
                                                      XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
                                                      YValue="@(e => GetOverlayYValue(e, lvl, false))" />
                                 }
+                                <ApexPointSeries TItem="DailyBehaviorCount"
+                                                 Items="seriesData"
+                                                 Name="@($"{target} Duration unavailable")"
+                                                 Group="@target"
+                                                 SeriesType="SeriesType.Bar"
+                                                 Color="@targetColor"
+                                                 XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
+                                                 YValue="@(e => GetOverlayUnknownYValue(e, false))" />
                             }
                         }
                     }
@@ -364,7 +407,7 @@
                                              SeriesType="@CurrentSeriesType"
                                              Color="@color"
                                              XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)e.Target : (object)e.Date)"
-                                             YValue="@(e => !e.HasData ? null : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 3) : e.Count))" />
+                                             YValue="@(e => GetBehaviorYValue(e))" />
                         }
                         
                         var chartMinDate = FilteredBehaviorCounts.Any() ? FilteredBehaviorCounts.Min(x => x.Date) : (_dateRange?.Start ?? DateTime.Today.AddDays(-30));
@@ -541,7 +584,11 @@
                                 var targetColor = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
                                 var hasIntensity = _showIntensity && _targetsWithIntensityData.Contains(target);
                                 var hasDuration = _showDuration && _targetsWithDurationData.Contains(target);
-                                var metricLabel = hasIntensity ? "severity" : (hasDuration ? "duration" : "");
+                                var metricLabel = hasIntensity
+                                    ? "severity"
+                                    : (hasDuration
+                                        ? "duration"
+                                        : (_showIntensity ? "intensity unavailable" : "duration unavailable"));
                                 <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                                     @if (hasIntensity || hasDuration)
                                     {
@@ -604,6 +651,7 @@
     private ApexChartOptions<DailyBehaviorCount>? _options;
     private ApexChart<DailyBehaviorCount>? _chart;
     private VariableSelector? _variableSelector;
+    private bool _filtersOpen = true;
 
     // --- Data Source State ---
     private bool _useDataWarehouse = true;
@@ -634,7 +682,7 @@
 
     // --- Stacked bar labels ---
     private static readonly string[] IntensityLabels = { "Minimal (1)", "Mild (2)", "Moderate (3)", "Severe (4)", "Extreme (5)" };
-    private static readonly string[] DurationLabels = { "<5 min", "6-10 min", "11-20 min", "21-30 min", "31+ min" };
+    private static readonly string[] DurationLabels = { "<5 min", "6-10 min", "11-20 min", "21-30 min", "31-60 min", "60+ min" };
 
     // --- Data-driven metric availability (computed dynamically based on visible date range) ---
     private HashSet<string> _targetsWithIntensityData => FilteredBehaviorCounts
@@ -642,11 +690,11 @@
         .Select(x => x.Target).ToHashSet();
         
     private HashSet<string> _targetsWithDurationData => FilteredBehaviorCounts
-        .Where(x => x.DurationBuckets != null && x.DurationBuckets.Take(5).Any(b => b > 0))
+        .Where(x => x.DurationBuckets != null && x.DurationBuckets.Any(b => b > 0))
         .Select(x => x.Target).ToHashSet();
 
     // --- Computed Properties ---
-    private string ChartKey => $"{_chartType}_{_showIntensity}_{_showDuration}_{string.Join(",", VisibleTargets)}";
+    private string ChartKey => $"{_chartType}_{_showIntensity}_{_showDuration}_{_showMedications}_{string.Join(",", VisibleTargets)}";
     private bool IsOverlayStackedMode => _chartType == ChartDisplayType.Bar && 
         ((_showIntensity && _targetsWithIntensityData.Any()) || 
          (_showDuration && _targetsWithDurationData.Any()));
@@ -789,6 +837,7 @@
 
     private async Task OnVariableStateChanged()
     {
+        await LoadDataAsync();
         BuildChartOptions();
         if (_chart != null)
         {
@@ -853,16 +902,17 @@
         var shifts = _selectedShifts != null ? new HashSet<string>(_selectedShifts) : null;
         DateTime? filterStart = _selectedPeriod == AggregationPeriod.Average ? (_startDate ?? _dateRange?.Start) : null;
         DateTime? filterEnd = _selectedPeriod == AggregationPeriod.Average ? (_endDate ?? _dateRange?.End) : null;
+        var hiddenSubcategories = _variableSelector?.GetHiddenSubcategories();
         
         if (!_useDataWarehouse && _parsedWorkbook != null)
         {
             _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                _selectedPeriod, shifts, filterStart, filterEnd);
+                _selectedPeriod, shifts, filterStart, filterEnd, hiddenSubcategories);
         }
         else
         {
-            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, hiddenSubcategories);
         }
 
         if (_viewModel != null)
@@ -874,11 +924,11 @@
                 {
                     _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                        _selectedPeriod, shifts, filterStart, filterEnd);
+                        _selectedPeriod, shifts, filterStart, filterEnd, hiddenSubcategories);
                 }
                 else
                 {
-                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, hiddenSubcategories);
                 }
             }
         }
@@ -899,6 +949,14 @@
         var file = e.File;
         if (file != null)
         {
+            var extension = Path.GetExtension(file.Name);
+            if (!new[] { ".xlsx", ".xlsm", ".xls" }.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            {
+                _uploadMessage = "Select a supported Excel workbook (.xlsx, .xlsm, or .xls).";
+                _uploadMessageColor = MudBlazor.Color.Error;
+                return;
+            }
+
             _uploadMessage = "Parsing workbook...";
             _uploadMessageColor = MudBlazor.Color.Info;
             StateHasChanged();
@@ -926,7 +984,9 @@
             }
             catch (Exception ex)
             {
-                _uploadMessage = $"Error: {ex.Message}";
+                LoggerFactory.CreateLogger("WorkbookUpload")
+                    .LogError(ex, "Workbook upload or parsing failed");
+                _uploadMessage = "The workbook could not be processed. Verify that it uses the supported template and is not damaged.";
                 _uploadMessageColor = MudBlazor.Color.Error;
                 StateHasChanged();
             }
@@ -1025,6 +1085,7 @@
         var strokeDashArrays = new List<double>();
         
         var isBarMode = _chartType == ChartDisplayType.Bar && !isStacked;
+        var useExactBarHover = _chartType == ChartDisplayType.Bar;
         var behaviorCurve = _chartType == ChartDisplayType.Line && !isStacked ? Curve.Straight : Curve.Straight;
         // In bar mode, behavior series still need a value in the stroke array (ApexCharts requires one per series)
         // but they're bars so the actual stroke width doesn't matter — use 0
@@ -1070,12 +1131,158 @@
                 
                 if (activeMeds.Any())
                 {
-                    var medsHtml = string.Join("<br/>", activeMeds.Select(m => $"<span style='font-size: 11px; font-weight: normal; color: #555;'>{m.Name}: <b>{m.Dose} {m.Unit}</b></span>"));
+                    var medsHtml = string.Join("<br/>", activeMeds.Select(m =>
+                    {
+                        var name = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Name);
+                        var unit = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Unit);
+                        return $"<span style='font-size: 11px; font-weight: normal; color: #555;'>{name}: <b>{m.Dose} {unit}</b></span>";
+                    }));
                     medLookup[((DateTimeOffset)date).ToUnixTimeMilliseconds()] = medsHtml;
                 }
             }
         }
         var medLookupJson = System.Text.Json.JsonSerializer.Serialize(medLookup);
+
+        string? stackedBarTooltip = null;
+        if (isStacked)
+        {
+            // The plotted overlay values may be rate-scaled, but tooltip values
+            // report original counts. Group duplicate target/date records so
+            // Rolling mode cannot terminate the circuit with duplicate keys.
+            var overlayCountLookup = FilteredBehaviorCounts
+                .GroupBy(item =>
+                    $"{item.Target}|{new DateTimeOffset(item.Date, TimeSpan.Zero).ToUnixTimeMilliseconds()}")
+                .ToDictionary(
+                    group => group.Key,
+                    group =>
+                    {
+                        // Six bucket slots (duration uses all six), plus the
+                        // original episode total used by the unavailable series.
+                        var counts = new double[7];
+                        foreach (var item in group)
+                        {
+                            var buckets = _showIntensity
+                                ? item.IntensityBuckets.Take(5)
+                                : item.DurationBuckets.Take(6);
+                            var index = 0;
+                            foreach (var bucket in buckets)
+                                counts[index++] += bucket;
+                            counts[6] += item.Count;
+                        }
+                        return counts;
+                    });
+            var overlayCountLookupJson = System.Text.Json.JsonSerializer.Serialize(overlayCountLookup);
+
+            stackedBarTooltip = @"function({series, seriesIndex, dataPointIndex, w}) {
+            var names = w.globals.seriesNames || [];
+            var hoveredName = names[seriesIndex] || '';
+            var baseName = hoveredName
+                .split(' Level ')[0]
+                .split(' Duration ')[0]
+                .split(' (Unspecified)')[0]
+                .split(' Intensity unavailable')[0];
+            var hoveredX = w.globals.seriesX[seriesIndex]
+                ? w.globals.seriesX[seriesIndex][dataPointIndex]
+                : null;
+            var rawCountsByPoint = " + overlayCountLookupJson + @";
+            var rawCounts = hoveredX === null
+                ? null
+                : rawCountsByPoint[baseName + '|' + String(Number(hoveredX))];
+
+            var escapeHtml = function(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/""/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            };
+
+            var rows = [];
+            var total = 0;
+
+            for (var i = 0; i < names.length; i++) {
+                var name = names[i] || '';
+                var itemBase = name
+                    .split(' Level ')[0]
+                    .split(' Duration ')[0]
+                    .split(' (Unspecified)')[0]
+                    .split(' Intensity unavailable')[0];
+                if (itemBase !== baseName) continue;
+
+                var pointIndex = dataPointIndex;
+                var xValues = w.globals.seriesX[i] || [];
+                if (hoveredX !== null) {
+                    var matchingIndex = xValues.findIndex(function(x) {
+                        return Number(x) === Number(hoveredX);
+                    });
+                    if (matchingIndex >= 0) pointIndex = matchingIndex;
+                }
+
+                var value = series[i] ? series[i][pointIndex] : null;
+                if (value === null || value === undefined || Number(value) <= 0) continue;
+
+                var label = name.substring(baseName.length).trim();
+                if (!label) label = name;
+                var numericValue = Number(value);
+                var bucketMatch = label.match(/(?:Level|Duration)\s+(\d+)/);
+                if (rawCounts && bucketMatch) {
+                    var bucketIndex = Number(bucketMatch[1]) - 1;
+                    if (bucketIndex >= 0 && bucketIndex < 6)
+                        numericValue = Number(rawCounts[bucketIndex] || 0);
+                } else if (rawCounts && label.toLowerCase().includes('unavailable')) {
+                    numericValue = Number(rawCounts[6] || 0);
+                }
+
+                if (numericValue <= 0) continue;
+                total += numericValue;
+                rows.push({
+                    label: label,
+                    value: numericValue,
+                    color: (w.globals.colors && w.globals.colors[i]) || '#607d8b',
+                    level: bucketMatch ? Number(bucketMatch[1]) : -1
+                });
+            }
+
+            rows.sort(function(a, b) {
+                return b.level - a.level;
+            });
+
+            var dateLabel = '';
+            if (hoveredX !== null && !isNaN(Number(hoveredX))) {
+                dateLabel = new Date(Number(hoveredX)).toLocaleDateString('en-US', {
+                    month: 'short',
+                    year: 'numeric',
+                    timeZone: 'UTC'
+                });
+            }
+
+            var formatValue = function(value) {
+                return Math.round(value * 100) / 100;
+            };
+
+            var html = '<div style=""min-width:180px;padding:10px 12px;"">';
+            if (dateLabel) {
+                html += '<div style=""font-size:11px;color:#68757f;margin-bottom:2px;"">' +
+                    escapeHtml(dateLabel) + '</div>';
+            }
+            html += '<div style=""font-weight:700;margin-bottom:7px;"">' +
+                escapeHtml(baseName) + '</div>';
+
+            for (var r = 0; r < rows.length; r++) {
+                html += '<div style=""display:flex;align-items:center;gap:7px;margin:4px 0;"">' +
+                    '<span style=""width:9px;height:9px;border-radius:2px;background:' +
+                    escapeHtml(rows[r].color) + ';""></span>' +
+                    '<span style=""flex:1;"">' + escapeHtml(rows[r].label) + '</span>' +
+                    '<strong>' + formatValue(rows[r].value) + '</strong></div>';
+            }
+
+            html += '<div style=""display:flex;justify-content:space-between;border-top:1px solid #e1e5e8;margin-top:7px;padding-top:7px;"">' +
+                '<span style=""font-weight:600;"">Total</span><strong>' + formatValue(total) + '</strong></div>';
+            html += '</div>';
+            return html;
+        }";
+        }
         var xPaddingDays = _selectedPeriod switch {
                 AggregationPeriod.Month => 12, // 12 days prevents rounding up to the next month's tick
                 AggregationPeriod.Week => 3,
@@ -1101,8 +1308,11 @@
                 },
             Tooltip = new Tooltip
             {
-                Intersect = isBarMode,
-                Shared = !isBarMode,
+                // Bar charts should respond only when the pointer is over an
+                // actual bar. Shared nearest-X behavior can select the next
+                // month while the pointer is still beside the previous bar.
+                Intersect = useExactBarHover,
+                Shared = !useExactBarHover,
                 HideEmptySeries = true,
                 InverseOrder = isStacked,
                 X = new TooltipX
@@ -1184,7 +1394,7 @@
             {
                 Bar = new PlotOptionsBar
                 {
-                    ColumnWidth = _selectedPeriod == AggregationPeriod.Average ? "60%" : "80%",
+                    ColumnWidth = _selectedPeriod == AggregationPeriod.Average ? "40%" : "80%",
                     BorderRadius = 2,
                     HideZeroBarsWhenGrouped = true
                 }
@@ -1201,8 +1411,24 @@
             {
                 BorderColor = "#f0f0f0",
                 StrokeDashArray = 4
+            },
+            States = new States
+            {
+                Hover = new StatesHover
+                {
+                    Filter = new StatesFilter { Type = StatesFilterType.none }
+                }
             }
         };
+
+        // Keep the two tooltip paths completely separate. ApexCharts treats the
+        // presence of a null `custom` option as a formatter and attempts to call
+        // it, which breaks ordinary charts. Only stacked overlay charts receive
+        // the custom tooltip property at all.
+        if (isStacked)
+        {
+            _options.Tooltip.Custom = stackedBarTooltip;
+        }
 
         // 1. Behavior Axis templates
         var globalMax = 10m;
@@ -1554,13 +1780,38 @@
     {
         double bucketCount = isIntensity ? (e.IntensityBuckets != null && e.IntensityBuckets.Length > bucketLevel ? e.IntensityBuckets[bucketLevel] : 0) : (e.DurationBuckets != null && e.DurationBuckets.Length > bucketLevel ? e.DurationBuckets[bucketLevel] : 0);
         if (bucketCount == 0 || e.Count == 0) return null;
-        
-        return _yAxisMetric == YAxisMetric.Rate ? (decimal)(bucketCount * (e.Rate / e.Count)) : (decimal)bucketCount;
+
+        return _yAxisMetric == YAxisMetric.Rate
+            ? (decimal)(bucketCount * (e.Rate / e.Count))
+            : (decimal)bucketCount;
+    }
+
+    private decimal? GetBehaviorYValue(DailyBehaviorCount e)
+    {
+        if (!e.HasData) return null;
+
+        var value = _yAxisMetric == YAxisMetric.Rate
+            ? (decimal)Math.Round(e.Rate, 3)
+            : e.Count;
+
+        // ApexCharts can still draw a zero-height bar shape, particularly when
+        // rounded borders are enabled. Omit zero values from bar series entirely.
+        return _chartType == ChartDisplayType.Bar && value == 0 ? null : value;
     }
 
     private decimal? GetOverlayUnknownYValue(DailyBehaviorCount e, bool isIntensity)
     {
-        return null;
+        if (!e.HasData || e.Count == 0) return null;
+
+        var hasMetricData = isIntensity
+            ? e.IntensityBuckets?.Any(value => value > 0) == true
+            : e.DurationBuckets?.Any(value => value > 0) == true;
+
+        if (hasMetricData) return null;
+
+        return _yAxisMetric == YAxisMetric.Rate
+            ? (decimal)Math.Round(e.Rate, 3)
+            : e.Count;
     }
     private DailyBehaviorCount? _hoveredPoint;
     private string? _hoveredDateString;
@@ -1572,10 +1823,20 @@
     private Task OnChartHover(HoverData<DailyBehaviorCount> args)
     {
         var hoveredSeriesName = args.Series?.Name;
-        var item = args.DataPoint?.Items?.FirstOrDefault(x => x.Target == hoveredSeriesName);
-        
-        if (item == null)
-            item = args.DataPoint?.Items?.FirstOrDefault(x => x.HasData && x.Count > 0 && !string.IsNullOrEmpty(x.Target) && !x.Target.Contains(" (mg)")) ?? args.DataPoint?.Items?.FirstOrDefault();
+        var hoveredTarget = GetBaseTargetName(hoveredSeriesName);
+        var hoveredDate = GetHoveredDate(args.DataPoint?.X);
+
+        // Stacked intensity/duration series are sparse because empty buckets are
+        // rendered as null. Resolve the model from the hovered X value rather than
+        // relying on DataPoint.Items, whose index can drift across sparse series.
+        var item = hoveredDate.HasValue && !string.IsNullOrEmpty(hoveredTarget)
+            ? FilteredBehaviorCounts.FirstOrDefault(x =>
+                x.Target == hoveredTarget && x.Date.Date == hoveredDate.Value.Date)
+            : null;
+
+        // Category-based charts do not expose a date-valued X coordinate.
+        item ??= args.DataPoint?.Items?.FirstOrDefault(x =>
+            x.Target == hoveredTarget && x.HasData);
 
         if (item == null || string.IsNullOrEmpty(item.Target) || item.Target.Contains(" (mg)") || item.HasData == false)
             return Task.CompletedTask;
@@ -1631,10 +1892,11 @@
 
         _hoveredIntensities = new List<KeyValuePair<int, int>>
         {
-            new(1, (int)rawRecords.Sum(x => x.Intensity_02_Count ?? 0)),
-            new(2, (int)rawRecords.Sum(x => x.Intensity_03_Count ?? 0)),
-            new(3, (int)rawRecords.Sum(x => x.Intensity_04_Count ?? 0)),
-            new(4, (int)rawRecords.Sum(x => x.Intensity_05_Count ?? 0))
+            new(1, (int)rawRecords.Sum(x => x.Intensity_01_Count ?? 0)),
+            new(2, (int)rawRecords.Sum(x => x.Intensity_02_Count ?? 0)),
+            new(3, (int)rawRecords.Sum(x => x.Intensity_03_Count ?? 0)),
+            new(4, (int)rawRecords.Sum(x => x.Intensity_04_Count ?? 0)),
+            new(5, (int)rawRecords.Sum(x => x.Intensity_05_Count ?? 0))
         };
 
         _hoveredDuration = rawRecords.Sum(x => (x.Duration_01_Count ?? 0) + (x.Duration_02_Count ?? 0) + 
@@ -1643,5 +1905,63 @@
 
         InvokeAsync(StateHasChanged);
         return Task.CompletedTask;
+    }
+
+    private static string? GetBaseTargetName(string? seriesName)
+    {
+        if (string.IsNullOrWhiteSpace(seriesName)) return null;
+
+        return seriesName
+            .Split(" Level ")[0]
+            .Split(" Duration ")[0]
+            .Split(" (Severity)")[0]
+            .Split(" (Duration)")[0]
+            .Split(" Intensity unavailable")[0];
+    }
+
+    private static DateTime? GetHoveredDate(object? xValue)
+    {
+        if (xValue == null) return null;
+        if (xValue is DateTime date) return date;
+        if (xValue is DateTimeOffset offset) return offset.UtcDateTime;
+
+        if (xValue is System.Text.Json.JsonElement json)
+        {
+            if (json.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                json.TryGetInt64(out var unixMilliseconds))
+            {
+                return DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds).UtcDateTime;
+            }
+
+            if (json.ValueKind == System.Text.Json.JsonValueKind.String)
+                return ParseHoveredDate(json.GetString());
+        }
+
+        return ParseHoveredDate(Convert.ToString(xValue, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static DateTime? ParseHoveredDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        if (long.TryParse(value, out var unixMilliseconds))
+        {
+            try
+            {
+                return DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds).UtcDateTime;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return null;
+            }
+        }
+
+        return DateTime.TryParse(
+            value,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var date)
+                ? date
+                : null;
     }
 }

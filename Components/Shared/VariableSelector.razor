@@ -1,7 +1,7 @@
 @using MudBlazor
 @using PsychDashboard.ViewModels
 
-<MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid #e0e0e0; border-radius: 8px;">
+<MudPaper Class="pa-3 sidebar-card" Elevation="0">
     <MudStack Spacing="2">
         <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #424242;">
             <MudIcon Icon="@Icons.Material.Filled.Tune" Size="MudBlazor.Size.Small" Class="mr-1" />
@@ -24,10 +24,12 @@
                              @ondblclick="@(() => IsolateTarget(target))">
                         @target
                     </MudText>
-                    <input type="color"
-                           value="@targetState.Color"
-                           @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))"
-                           style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                    <label class="color-swatch" style="@($"--swatch-color: {targetState.Color}")" title="Change @target color">
+                        <input type="color"
+                               value="@targetState.Color"
+                               aria-label="Change @target color"
+                               @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))" />
+                    </label>
                     @if (HasSubcategories(target))
                     {
                         <MudIconButton Icon="@(targetState.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
@@ -76,7 +78,6 @@
                     <MudIcon Icon="@Icons.Material.Filled.Medication" Size="MudBlazor.Size.Small" Class="mr-1" />
                     Medications
                 </MudText>
-                <MudSwitch T="bool" Value="ShowMedications" ValueChanged="OnShowMedicationsChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" />
             </MudStack>
             
             @if (ShowMedications)
@@ -98,10 +99,12 @@
                                      @ondblclick="@(() => IsolateMedication(med))">
                                 @med
                             </MudText>
-                            <input type="color"
-                                   value="@medColor"
-                                   @onchange="@((ChangeEventArgs e) => OnMedicationColorChanged(med, e.Value?.ToString() ?? "#3e2723"))"
-                                   style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                            <label class="color-swatch" style="@($"--swatch-color: {medColor}")" title="Change @med color">
+                                <input type="color"
+                                       value="@medColor"
+                                       aria-label="Change @med color"
+                                       @onchange="@((ChangeEventArgs e) => OnMedicationColorChanged(med, e.Value?.ToString() ?? "#3e2723"))" />
+                            </label>
                         </MudStack>
                     }
                 </MudStack>
@@ -186,6 +189,14 @@
     {
         return AvailableTargets.ToDictionary(t => t, t => GetTargetColor(t));
     }
+
+    public Dictionary<string, HashSet<string>> GetHiddenSubcategories() =>
+        _targetStates
+            .Where(entry => entry.Value.HiddenSubcategories.Count > 0)
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value.HiddenSubcategories.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
 
     // Medication State
     private HashSet<string> _hiddenMedications = new(StringComparer.OrdinalIgnoreCase);
