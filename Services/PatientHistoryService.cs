@@ -141,6 +141,12 @@ namespace PsychDashboard.Services
                 // Build missing data ranges
                 viewModel.MissingDataRanges = BuildMissingDataRanges(noDataRows, residentRecords);
 
+                // Apply date range filter before aggregation (critical for Rolling/Average mode)
+                if (filterStartDate.HasValue)
+                    filteredRecords = filteredRecords.Where(r => r.Date!.Value.Date >= filterStartDate.Value.Date).ToList();
+                if (filterEndDate.HasValue)
+                    filteredRecords = filteredRecords.Where(r => r.Date!.Value.Date <= filterEndDate.Value.Date).ToList();
+
                 // Group and aggregate
                 List<DailyBehaviorCount> grouped = period switch
                 {
@@ -149,6 +155,7 @@ namespace PsychDashboard.Services
                     
                     AggregationPeriod.Week => AggregateByWeek(filteredRecords),
                     AggregationPeriod.Month => AggregateByMonth(filteredRecords),
+                    AggregationPeriod.Average => AggregateByAverage(filteredRecords),
                     _ => AggregateByDay(filteredRecords)
                 };
 
