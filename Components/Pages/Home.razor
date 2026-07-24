@@ -358,25 +358,6 @@
                             foreach (var d in seriesData.Where(x => x.Date.Year == 2025 && x.Date.Month == 10)) {
                                 Console.WriteLine($"DEBUG: Target={target}, Date={d.Date:yyyy-MM-dd}, Count={d.Count}, Rate={d.Rate}, HasData={d.HasData}");
                             }
-                            var missingDates = globalAllDates.Except(seriesData.Select(x => x.Date)).ToList();
-                            if (missingDates.Any())
-                            {
-                                var originalData = seriesData.OrderBy(x => x.Date).ToList();
-                                foreach (var d in missingDates)
-                                {
-                                    var prev = originalData.LastOrDefault(x => x.Date < d);
-                                     seriesData.Add(new DailyBehaviorCount 
-                                     { 
-                                         Date = d, 
-                                         Target = target,
-                                         Count = 0,
-                                         Rate = 0,
-                                         HasData = false 
-                                     });
-                                }
-                                seriesData = seriesData.OrderBy(x => x.Date).ToList();
-                            }
-
                             var color = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
 
                             <ApexPointSeries TItem="DailyBehaviorCount"
@@ -384,8 +365,8 @@
                                              Name="@target"
                                              SeriesType="@CurrentSeriesType"
                                              Color="@color"
-                                             XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
-                                             YValue="@(e => !e.HasData ? 0 : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 3) : e.Count))" />
+                                             XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)e.Target : (object)e.Date)"
+                                             YValue="@(e => !e.HasData ? null : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 3) : e.Count))" />
                         }
                         
                         var chartMinDate = FilteredBehaviorCounts.Any() ? FilteredBehaviorCounts.Min(x => x.Date) : (_dateRange?.Start ?? DateTime.Today.AddDays(-30));
