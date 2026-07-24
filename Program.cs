@@ -31,4 +31,6 @@ app.UseStaticFiles();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+await PsychDashboard.TestParse.Run();
+PsychDashboard.TestDump.Run();
 app.Run();

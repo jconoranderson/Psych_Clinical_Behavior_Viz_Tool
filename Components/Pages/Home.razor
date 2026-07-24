@@ -207,6 +207,14 @@
 
                 @* RIGHT: ID select + date range — all native elements, same height *@
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <!-- DEBUG INFO -->
+                    <MudText Typo="Typo.caption" Style="color: red;">
+                        DEBUG:
+                        _useDataWarehouse=@_useDataWarehouse
+                        _selectedResident=@_selectedResident
+                        Available=@(string.Join(",", _viewModel?.AvailableResidents ?? new List<string>()))
+                        ParsedBehaviorCount=@(_parsedWorkbook?.Behaviors.Count ?? 0)
+                    </MudText>
                     @if (_viewModel?.AvailableResidents?.Any() == true)
                     {
                         <div style="width: 170px;">
