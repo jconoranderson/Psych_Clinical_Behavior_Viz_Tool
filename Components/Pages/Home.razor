@@ -1182,7 +1182,7 @@
             {
                 Bar = new PlotOptionsBar
                 {
-                    ColumnWidth = "80%",
+                    ColumnWidth = _selectedPeriod == AggregationPeriod.Average ? "60%" : "80%",
                     BorderRadius = 2,
                     HideZeroBarsWhenGrouped = true
                 }
