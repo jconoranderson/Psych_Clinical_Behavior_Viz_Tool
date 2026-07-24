@@ -52,8 +52,30 @@ namespace PsychDashboard.Services
                         personId = studentName; // In old system they sometimes just used name, or we can look for ID
                     }
                 }
+                else
+                {
+                    // Fallback for older formats: Check C1 in any month sheet
+                    foreach (var mSheet in MonthSheets)
+                    {
+                        if (result.Tables.Contains(mSheet))
+                        {
+                            var mTable = result.Tables[mSheet];
+                            if (mTable.Rows.Count > 0 && mTable.Columns.Count > 2)
+                            {
+                                var name = mTable.Rows[0][2]?.ToString()?.Trim(); // C1
+                                if (!string.IsNullOrEmpty(name))
+                                {
+                                    studentName = name;
+                                    personId = studentName;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 
-                // Determine year (optional, from YiVis or Info, but we get dates from rows anyway, wait, dates in month sheets are just day numbers! We need the Year!)
+                // Determine year
+                bool yearFound = false;
                 if (result.Tables.Contains("YiVis"))
                 {
                     var yivisTable = result.Tables["YiVis"];
@@ -67,6 +89,36 @@ namespace PsychDashboard.Services
                             {
                                 startYear = sy;
                                 if (startYear < 100) startYear += 2000;
+                                yearFound = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!yearFound)
+                {
+                    // Fallback for older format: Check B4 in Month Notes Sheets
+                    var monthNotesDatasheetNames = new[] { "JanN", "FebN", "MarN", "AprN", "MayN", "JuneN", "JulN", "AugN", "SeptN", "OctN", "NovN", "DecN" };
+                    foreach (var nSheet in monthNotesDatasheetNames)
+                    {
+                        if (result.Tables.Contains(nSheet))
+                        {
+                            var nTable = result.Tables[nSheet];
+                            if (nTable.Rows.Count >= 4 && nTable.Columns.Count >= 2)
+                            {
+                                var monthYear = nTable.Rows[3][1]?.ToString()?.Replace("\"", "")?.Trim(); // B4
+                                if (!string.IsNullOrEmpty(monthYear))
+                                {
+                                    var parts = monthYear.Split(' ');
+                                    if (parts.Length > 1 && int.TryParse(parts[1], out int parsedYear))
+                                    {
+                                        int monthIndex = Array.IndexOf(monthNotesDatasheetNames, nSheet);
+                                        // Jan-Jun (0-5) are in startYear + 1, Jul-Dec (6-11) are in startYear
+                                        startYear = (monthIndex < 6) ? parsedYear - 1 : parsedYear;
+                                        yearFound = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
