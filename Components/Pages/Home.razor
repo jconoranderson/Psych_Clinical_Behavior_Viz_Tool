@@ -864,14 +864,32 @@
         DateTime? filterStart = _selectedPeriod == AggregationPeriod.Average ? _dateRange?.Start : null;
         DateTime? filterEnd = _selectedPeriod == AggregationPeriod.Average ? _dateRange?.End : null;
         
-        _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+        if (!_useDataWarehouse && _parsedWorkbook != null)
+        {
+            _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
+                _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
+                _selectedPeriod, shifts, filterStart, filterEnd);
+        }
+        else
+        {
+            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+        }
 
         if (_viewModel != null)
         {
             if (string.IsNullOrEmpty(_selectedResident) && _viewModel.AvailableResidents.Any())
             {
                 _selectedResident = _viewModel.AvailableResidents.First();
-                _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+                if (!_useDataWarehouse && _parsedWorkbook != null)
+                {
+                    _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
+                        _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
+                        _selectedPeriod, shifts, filterStart, filterEnd);
+                }
+                else
+                {
+                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+                }
             }
         }
     }
