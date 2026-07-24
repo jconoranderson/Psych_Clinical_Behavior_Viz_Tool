@@ -31,7 +31,7 @@ namespace PsychDashboard.Services
             _logger = logger;
         }
 
-        public async Task<DashboardViewModel> GetPatientHistoryAsync(
+        public Task<DashboardViewModel> GetPatientHistoryAsync(
             AggregationPeriod period, 
             HashSet<string>? selectedShifts = null,
             string? selectedResident = null,
@@ -73,7 +73,7 @@ namespace PsychDashboard.Services
                 _logger?.LogWarning("Configured medication CSV was not found at {MedicationCsvPath}", medicationPath);
             }
 
-            return ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate, hiddenSubcategories);
+            return Task.FromResult(ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate, hiddenSubcategories));
         }
 
         public Task<DashboardViewModel> GetPatientHistoryFromRecordsAsync(

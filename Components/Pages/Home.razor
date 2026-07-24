@@ -1704,7 +1704,19 @@
     {
         if (_chart != null)
         {
-            try { await _chart.RenderAsync(); } catch { /* chart may not be ready */ }
+            try
+            {
+                await _chart.RenderAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser navigated away while a render was queued.
+            }
+            catch (Exception ex)
+            {
+                LoggerFactory.CreateLogger("ChartRendering")
+                    .LogWarning(ex, "Chart render failed");
+            }
         }
     }
 
