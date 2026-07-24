@@ -39,10 +39,10 @@
     </MudStack>
 </MudAppBar>
 
-<MudGrid Spacing="3" Class="mt-2">
+<MudGrid Spacing="2" Class="mt-1">
 
     @* ===== LEFT SIDEBAR: Variable Selector + Interventions ===== *@
-    <MudItem xs="12" md="3" lg="2" Style="display: flex; flex-direction: column; max-height: calc(100vh - 180px); overflow-y: auto;">
+    <MudItem xs="12" md="3" lg="2" Style="display: flex; flex-direction: column; max-height: calc(100vh - 120px); overflow-y: auto;">
         <MudStack Spacing="3" Style="flex-grow: 1; min-height: 0;">
             @if (_viewModel != null)
             {
@@ -134,7 +134,7 @@
     </MudItem>
 
     @* ===== MAIN CHART AREA ===== *@
-    <MudItem xs="12" md="9" lg="10" Style="display: flex; flex-direction: column; height: calc(100vh - 180px); min-height: 500px;">
+    <MudItem xs="12" md="9" lg="10" Style="display: flex; flex-direction: column; height: calc(100vh - 120px); min-height: 400px;">
         <MudPaper Class="pa-3 d-flex flex-column" Elevation="1" Style="border-radius: 12px; flex-grow: 1;">
             @* --- Toolbar Row 1: Title + Controls --- *@
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1">
