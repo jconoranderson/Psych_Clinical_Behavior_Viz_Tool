@@ -26,14 +26,30 @@
         
         @if (!_useDataWarehouse)
         {
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <InputFile id="fileInput" OnChange="UploadWorkbook" accept=".xlsm,.xlsx,.xls" hidden />
-                <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="MudBlazor.Color.Secondary" StartIcon="@Icons.Material.Filled.FileUpload" Size="MudBlazor.Size.Small" Style="height: 32px;">
-                    Upload
-                </MudButton>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="workbook-import-controls">
+                <div class="workbook-drop-zone">
+                    <InputFile id="fileInput"
+                               OnChange="UploadWorkbooks"
+                               accept=".xlsm,.xlsx,.xls"
+                               multiple
+                               class="workbook-file-input" />
+                    <MudIcon Icon="@Icons.Material.Filled.FileUpload" Size="MudBlazor.Size.Small" />
+                    <span>Drop workbooks here</span>
+                    <span class="workbook-drop-separator">or</span>
+                    <span class="workbook-upload-button">Choose files</span>
+                </div>
+                @if (_parsedWorkbook != null)
+                {
+                    <MudTooltip Text="Clear loaded workbooks">
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                       Size="MudBlazor.Size.Small"
+                                       Color="MudBlazor.Color.Default"
+                                       OnClick="ClearWorkbooks" />
+                    </MudTooltip>
+                }
                 @if (!string.IsNullOrEmpty(_uploadMessage))
                 {
-                    <MudText Typo="Typo.caption" Color="@_uploadMessageColor">@_uploadMessage</MudText>
+                    <MudText Typo="Typo.caption" Color="@_uploadMessageColor" Class="workbook-upload-message">@_uploadMessage</MudText>
                 }
             </MudStack>
         }
@@ -656,6 +672,7 @@
     // --- Data Source State ---
     private bool _useDataWarehouse = false;
     private PsychDashboard.Services.ParsedWorkbookResult? _parsedWorkbook;
+    private readonly HashSet<string> _loadedWorkbookSignatures = new(StringComparer.Ordinal);
     private string _uploadMessage = "";
     private MudBlazor.Color _uploadMessageColor = MudBlazor.Color.Default;
 
@@ -954,62 +971,121 @@
         await RenderChart();
     }
 
-    private async Task UploadWorkbook(InputFileChangeEventArgs e)
+    private async Task UploadWorkbooks(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file != null)
+        const int maxWorkbookCount = 25;
+        const long maxWorkbookSize = 10 * 1024 * 1024;
+        IReadOnlyList<IBrowserFile> files;
+
+        try
         {
-            var extension = Path.GetExtension(file.Name);
-            if (!new[] { ".xlsx", ".xlsm", ".xls" }.Contains(extension, StringComparer.OrdinalIgnoreCase))
-            {
-                _uploadMessage = "Select a supported Excel workbook (.xlsx, .xlsm, or .xls).";
-                _uploadMessageColor = MudBlazor.Color.Error;
-                return;
-            }
+            files = e.GetMultipleFiles(maxWorkbookCount);
+        }
+        catch (InvalidOperationException)
+        {
+            _uploadMessage = $"Select no more than {maxWorkbookCount} workbooks at once.";
+            _uploadMessageColor = MudBlazor.Color.Error;
+            return;
+        }
 
-            _uploadMessage = "Parsing workbook...";
-            _uploadMessageColor = MudBlazor.Color.Info;
-            StateHasChanged();
+        if (files.Count == 0) return;
 
-            try
+        var invalidFile = files.FirstOrDefault(file =>
+            !new[] { ".xlsx", ".xlsm", ".xls" }
+                .Contains(Path.GetExtension(file.Name), StringComparer.OrdinalIgnoreCase));
+        if (invalidFile != null)
+        {
+            _uploadMessage = $"{invalidFile.Name} is not a supported Excel workbook.";
+            _uploadMessageColor = MudBlazor.Color.Error;
+            return;
+        }
+
+        var oversizedFile = files.FirstOrDefault(file => file.Size > maxWorkbookSize);
+        if (oversizedFile != null)
+        {
+            _uploadMessage = $"{oversizedFile.Name} exceeds the 10 MB workbook limit.";
+            _uploadMessageColor = MudBlazor.Color.Error;
+            return;
+        }
+
+        _uploadMessage = $"Parsing {files.Count} workbook{(files.Count == 1 ? "" : "s")}...";
+        _uploadMessageColor = MudBlazor.Color.Info;
+        StateHasChanged();
+
+        try
+        {
+            var parsedBatch = new List<ParsedWorkbookResult>();
+            foreach (var file in files)
             {
-                using var stream = file.OpenReadStream(10 * 1024 * 1024);
+                using var stream = file.OpenReadStream(maxWorkbookSize);
                 using var ms = new MemoryStream();
                 await stream.CopyToAsync(ms);
                 ms.Position = 0;
+                parsedBatch.Add(await ExcelParsingService.ParseWorkbookAsync(ms));
+            }
 
-                _parsedWorkbook = await ExcelParsingService.ParseWorkbookAsync(ms);
-                
-                _uploadMessage = $"Success: Loaded {_parsedWorkbook.Behaviors.Count} behavior records and {_parsedWorkbook.Medications.Count} medications.";
-                _uploadMessageColor = MudBlazor.Color.Success;
-                
-                _selectedResident = null;
-                _useDataWarehouse = false;
-                
-                await LoadDataAsync();
-                
-                InitializeDefaultDateRange();
-                BuildChartOptions();
-                await RenderChart();
-            }
-            catch (Exception ex)
+            _parsedWorkbook = WorkbookMergeService.Merge(_parsedWorkbook, parsedBatch);
+            foreach (var file in files)
             {
-                LoggerFactory.CreateLogger("WorkbookUpload")
-                    .LogError(ex, "Workbook upload or parsing failed");
-                _uploadMessage = "The workbook could not be processed. Verify that it uses the supported template and is not damaged.";
-                _uploadMessageColor = MudBlazor.Color.Error;
-                StateHasChanged();
+                _loadedWorkbookSignatures.Add(
+                    $"{file.Name}|{file.Size}|{file.LastModified.UtcDateTime:O}");
             }
+
+            _uploadMessage = BuildWorkbookSummary();
+            _uploadMessageColor = MudBlazor.Color.Success;
+            _selectedResident = null;
+            _useDataWarehouse = false;
+
+            await LoadDataAsync();
+            InitializeDefaultDateRange(showFullHistory: _loadedWorkbookSignatures.Count > 1);
+            BuildChartOptions();
+            await RenderChart();
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger("WorkbookUpload")
+                .LogError(ex, "Workbook batch upload or parsing failed");
+            _uploadMessage = "The workbooks could not be processed. No files from this batch were added.";
+            _uploadMessageColor = MudBlazor.Color.Error;
+            StateHasChanged();
         }
     }
 
+    private async Task ClearWorkbooks()
+    {
+        _parsedWorkbook = null;
+        _loadedWorkbookSignatures.Clear();
+        _uploadMessage = "";
+        _selectedResident = null;
+        await LoadDataAsync();
+        BuildChartOptions();
+        await RenderChart();
+    }
 
-    private void InitializeDefaultDateRange()
+    private string BuildWorkbookSummary()
+    {
+        if (_parsedWorkbook == null) return "";
+
+        var datedRecords = _parsedWorkbook.Behaviors
+            .Where(record => record.Date.HasValue)
+            .Select(record => record.Date!.Value.Date)
+            .ToList();
+        var dateSummary = datedRecords.Count == 0
+            ? ""
+            : $" • {datedRecords.Min():MMM yyyy}–{datedRecords.Max():MMM yyyy}";
+
+        return $"{_loadedWorkbookSignatures.Count} workbook{(_loadedWorkbookSignatures.Count == 1 ? "" : "s")} loaded" +
+               $" • {_parsedWorkbook.Behaviors.Count:N0} behavior records{dateSummary}";
+    }
+
+    private void InitializeDefaultDateRange(bool showFullHistory = false)
     {
         if (_viewModel != null && _viewModel.GlobalMaxDate.HasValue)
         {
             var max = _viewModel.GlobalMaxDate.Value;
-            var min = max.AddYears(-1);
+            var min = showFullHistory && _viewModel.GlobalMinDate.HasValue
+                ? _viewModel.GlobalMinDate.Value
+                : max.AddYears(-1);
             if (_viewModel.GlobalMinDate.HasValue && min < _viewModel.GlobalMinDate.Value)
                 min = _viewModel.GlobalMinDate.Value;
             _startDate = min;
