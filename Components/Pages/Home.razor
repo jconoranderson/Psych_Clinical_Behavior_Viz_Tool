@@ -325,15 +325,6 @@
                                                      XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
                                                      YValue="@(e => GetOverlayYValue(e, lvl, true))" />
                                 }
-                                @* Fallback for unknown intensity so bar height matches total *@
-                                <ApexPointSeries TItem="DailyBehaviorCount"
-                                                 Items="seriesData"
-                                                 Name="@($"{target} (Unspecified)")"
-                                                 Group="@target"
-                                                 SeriesType="SeriesType.Bar"
-                                                 Color="#e0e0e0"
-                                                 XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
-                                                 YValue="@(e => GetOverlayUnknownYValue(e, true))" />
                             }
                             else if (_showDuration)
                             {
@@ -350,15 +341,6 @@
                                                      XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
                                                      YValue="@(e => GetOverlayYValue(e, lvl, false))" />
                                 }
-                                @* Fallback for unknown duration so bar height matches total *@
-                                <ApexPointSeries TItem="DailyBehaviorCount"
-                                                 Items="seriesData"
-                                                 Name="@($"{target} (Unspecified)")"
-                                                 Group="@target"
-                                                 SeriesType="SeriesType.Bar"
-                                                 Color="#e0e0e0"
-                                                 XValue="@(e => e.Label ?? e.Date.ToString("MMM dd"))"
-                                                 YValue="@(e => GetOverlayUnknownYValue(e, false))" />
                             }
                         }
                     }
@@ -1103,7 +1085,7 @@
                 Xaxis = new XAxis
                 {
                     Type = _selectedPeriod == AggregationPeriod.Average ? XAxisType.Category : XAxisType.Datetime,
-                    Labels = new XAxisLabels { Format = "dd MMM" },
+                    Labels = new XAxisLabels { Format = xAxisFormat, DatetimeUTC = false },
                     Min = _selectedPeriod == AggregationPeriod.Average ? null : new DateTimeOffset(DateTime.SpecifyKind(isBarMode ? xMinDate.AddDays(-xPaddingDays) : xMinDate, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
                     Max = _selectedPeriod == AggregationPeriod.Average ? null : new DateTimeOffset(DateTime.SpecifyKind(isBarMode ? xMaxDate.AddDays(xPaddingDays) : xMaxDate, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
                     Tooltip = new AxisTooltip { Enabled = false }
@@ -1569,11 +1551,7 @@
 
     private decimal? GetOverlayUnknownYValue(DailyBehaviorCount e, bool isIntensity)
     {
-        double sumBuckets = isIntensity ? (e.IntensityBuckets != null ? e.IntensityBuckets.Sum() : 0) : (e.DurationBuckets != null ? e.DurationBuckets.Take(5).Sum() : 0);
-        double unknownCount = e.Count - sumBuckets;
-        if (unknownCount <= 0 || e.Count == 0) return null;
-
-        return _yAxisMetric == YAxisMetric.Rate ? (decimal)(unknownCount * (e.Rate / e.Count)) : (decimal)unknownCount;
+        return null;
     }
     private DailyBehaviorCount? _hoveredPoint;
     private string? _hoveredDateString;
@@ -1644,11 +1622,10 @@
 
         _hoveredIntensities = new List<KeyValuePair<int, int>>
         {
-            new(1, (int)rawRecords.Sum(x => x.Intensity_01_Count ?? 0)),
-            new(2, (int)rawRecords.Sum(x => x.Intensity_02_Count ?? 0)),
-            new(3, (int)rawRecords.Sum(x => x.Intensity_03_Count ?? 0)),
-            new(4, (int)rawRecords.Sum(x => x.Intensity_04_Count ?? 0)),
-            new(5, (int)rawRecords.Sum(x => x.Intensity_05_Count ?? 0))
+            new(1, (int)rawRecords.Sum(x => x.Intensity_02_Count ?? 0)),
+            new(2, (int)rawRecords.Sum(x => x.Intensity_03_Count ?? 0)),
+            new(3, (int)rawRecords.Sum(x => x.Intensity_04_Count ?? 0)),
+            new(4, (int)rawRecords.Sum(x => x.Intensity_05_Count ?? 0))
         };
 
         _hoveredDuration = rawRecords.Sum(x => (x.Duration_01_Count ?? 0) + (x.Duration_02_Count ?? 0) + 
