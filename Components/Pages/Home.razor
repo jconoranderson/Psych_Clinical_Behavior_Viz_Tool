@@ -170,9 +170,9 @@
                 </MudStack>
             </MudStack>
 
-            @* --- Toolbar Row 2: Aggregation + Shifts | ID Select + Dates --- *@
+            @* --- Toolbar Row 2: Aggregation + Shifts | Overlays | ID Select + Dates --- *@
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1"
-                      Style="flex-wrap: wrap; gap: 4px;">
+                      Style="flex-wrap: nowrap; overflow-x: auto; gap: 16px;">
 
                 @* LEFT: Aggregation period + shift chips *@
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -209,14 +209,6 @@
 
                 @* RIGHT: ID select + date range — all native elements, same height *@
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <!-- DEBUG INFO -->
-                    <MudText Typo="Typo.caption" Style="color: red;">
-                        DEBUG:
-                        _useDataWarehouse=@_useDataWarehouse
-                        _selectedResident=@_selectedResident
-                        Available=@(string.Join(",", _viewModel?.AvailableResidents ?? new List<string>()))
-                        ParsedBehaviorCount=@(_parsedWorkbook?.Behaviors.Count ?? 0)
-                    </MudText>
                     @if (_viewModel?.AvailableResidents?.Any() == true)
                     {
                         <div style="width: 170px;">
@@ -438,6 +430,7 @@
                                                      Items="intensityData"
                                                      Name="@($"{target} (Severity)")"
                                                      SeriesType="SeriesType.Line"
+                                                     Color="#FF9800"
                                                      XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)e.Target : (object)e.Date)"
                                                      YValue="@(e => !e.HasData ? 0 : (decimal)Math.Round(e.AverageIntensity, 1))" />
                                 }
@@ -476,6 +469,7 @@
                                                      Items="durationData"
                                                      Name="@($"{target} (Duration)")"
                                                      SeriesType="SeriesType.Line"
+                                                     Color="#00BCD4"
                                                      XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)e.Target : (object)e.Date)"
                                                      YValue="@(e => !e.HasData ? 0 : (decimal)Math.Round(e.TotalDuration, 1))" />
                                 }
@@ -512,6 +506,7 @@
                                                      Items="plotData"
                                                      Name="@seriesName"
                                                      SeriesType="SeriesType.Line"
+                                                     Color="@medColor"
                                                      XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)e.Target : (object)e.Date)"
                                                      YValue="@(e => !e.HasData ? null : (decimal)Math.Log10(e.Rate))" />
                                 }
