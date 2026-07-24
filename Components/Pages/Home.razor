@@ -355,9 +355,7 @@
                         @foreach (var target in VisibleTargets)
                         {
                             var seriesData = FilteredBehaviorCounts.Where(x => x.Target == target).ToList();
-                            foreach (var d in seriesData.Where(x => x.Date.Year == 2025 && x.Date.Month == 10)) {
-                                Console.WriteLine($"DEBUG: Target={target}, Date={d.Date:yyyy-MM-dd}, Count={d.Count}, Rate={d.Rate}, HasData={d.HasData}");
-                            }
+
                             var color = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
 
                             <ApexPointSeries TItem="DailyBehaviorCount"
@@ -851,8 +849,8 @@
     private async Task LoadDataAsync()
     {
         var shifts = _selectedShifts != null ? new HashSet<string>(_selectedShifts) : null;
-        DateTime? filterStart = _selectedPeriod == AggregationPeriod.Average ? _dateRange?.Start : null;
-        DateTime? filterEnd = _selectedPeriod == AggregationPeriod.Average ? _dateRange?.End : null;
+        DateTime? filterStart = _selectedPeriod == AggregationPeriod.Average ? (_startDate ?? _dateRange?.Start) : null;
+        DateTime? filterEnd = _selectedPeriod == AggregationPeriod.Average ? (_endDate ?? _dateRange?.End) : null;
         
         if (!_useDataWarehouse && _parsedWorkbook != null)
         {
