@@ -9,35 +9,37 @@
 @inject IJSRuntime JS
 @inject ExcelParsingService ExcelParsingService
 
-<MudGrid Spacing="3">
-    @* ===== DATA SOURCE CONTROL ===== *@
-    <MudItem xs="12">
-        <MudPaper Class="pa-4" Elevation="1" Style="border-radius: 12px; display: flex; align-items: center; justify-content: flex-start; gap: 16px;">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.body2" Style="font-weight: 600; color: #555;">Data Source:</MudText>
-                    <MudToggleGroup T="bool" SelectionMode="SelectionMode.SingleSelection" Value="_useDataWarehouse" ValueChanged="OnDataSourceChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" CheckMark="true" Style="background-color: white; border-radius: 4px;">
-                        <MudToggleItem Value="true" Text="Data Warehouse" />
-                        <MudToggleItem Value="false" Text="Local Workbook" />
-                    </MudToggleGroup>
-                </MudStack>
-                
-                @if (!_useDataWarehouse)
+<MudAppBar Elevation="1" Style="background-color: white; padding-right: 24px;">
+    <MudImage Src="images/logo.png" Height="52" ObjectFit="ObjectFit.Contain" Class="mr-4" />
+    <MudText Typo="Typo.h5" Style="color: black; font-weight: 500;">Psychology Visualization Tool</MudText>
+    <MudSpacer />
+    
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudText Typo="Typo.body2" Style="font-weight: 600; color: #555;">Data Source:</MudText>
+            <MudToggleGroup T="bool" SelectionMode="SelectionMode.SingleSelection" Value="_useDataWarehouse" ValueChanged="OnDataSourceChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" CheckMark="true" Style="background-color: #f5f5f5; border-radius: 4px;">
+                <MudToggleItem Value="true" Text="Data Warehouse" />
+                <MudToggleItem Value="false" Text="Local Workbook" />
+            </MudToggleGroup>
+        </MudStack>
+        
+        @if (!_useDataWarehouse)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <InputFile id="fileInput" OnChange="UploadWorkbook" accept=".xlsm,.xlsx,.xls" hidden />
+                <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="MudBlazor.Color.Secondary" StartIcon="@Icons.Material.Filled.FileUpload" Size="MudBlazor.Size.Small" Style="height: 32px;">
+                    Upload
+                </MudButton>
+                @if (!string.IsNullOrEmpty(_uploadMessage))
                 {
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <InputFile id="fileInput" OnChange="UploadWorkbook" accept=".xlsm,.xlsx,.xls" hidden />
-                        <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="MudBlazor.Color.Secondary" StartIcon="@Icons.Material.Filled.FileUpload" Size="MudBlazor.Size.Small" Style="height: 32px;">
-                            Upload
-                        </MudButton>
-                        @if (!string.IsNullOrEmpty(_uploadMessage))
-                        {
-                            <MudText Typo="Typo.caption" Color="@_uploadMessageColor">@_uploadMessage</MudText>
-                        }
-                    </MudStack>
+                    <MudText Typo="Typo.caption" Color="@_uploadMessageColor">@_uploadMessage</MudText>
                 }
             </MudStack>
-        </MudPaper>
-    </MudItem>
+        }
+    </MudStack>
+</MudAppBar>
+
+<MudGrid Spacing="3" Class="mt-2">
 
     @* ===== LEFT SIDEBAR: Variable Selector + Interventions ===== *@
     <MudItem xs="12" md="3" lg="2" Style="display: flex; flex-direction: column; max-height: calc(100vh - 180px); overflow-y: auto;">
@@ -389,6 +391,7 @@
                                              Items="seriesData"
                                              Name="@target"
                                              SeriesType="@CurrentSeriesType"
+                                             Color="@color"
                                              XValue="@(e => new DateTimeOffset(e.Date, TimeSpan.Zero).ToUnixTimeMilliseconds())"
                                              YValue="@(e => !e.HasData ? 0 : (_yAxisMetric == YAxisMetric.Rate ? (decimal)Math.Round(e.Rate, 3) : e.Count))" />
                         }
@@ -687,7 +690,10 @@
         {
             if (_viewModel == null) return new();
             var visible = _variableSelector?.GetVisibleTargets() ?? _viewModel.AvailableTargets.ToHashSet();
-            return _viewModel.AvailableTargets.Where(t => visible.Contains(t)).OrderBy(t => t).ToList();
+            return _viewModel.AvailableTargets
+                .Where(t => visible.Contains(t))
+                .OrderByDescending(t => _viewModel.DailyBehaviorCounts.Where(x => x.Target == t).Sum(x => x.Count))
+                .ToList();
         }
     }
 
