@@ -75,3 +75,4 @@ appsettings.Development.json
 
 # Generated deployment packages
 /artifacts/
+/published_*/
