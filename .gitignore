@@ -72,3 +72,6 @@ appsettings.Development.json
 *.swp
 *.swo
 *~
+
+# Generated deployment packages
+/artifacts/
