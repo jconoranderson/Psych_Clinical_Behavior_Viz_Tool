@@ -54,13 +54,22 @@ variables, or protected IIS configuration. Double underscores represent nested
 ```text
 ASPNETCORE_ENVIRONMENT=Production
 AllowedHosts=psych-dashboard.example.org
+Security__RequireAuthentication=false
+```
+
+With authentication disabled, access must be restricted through the internal
+network, IIS, or another control approved by IT.
+
+When OpenID Connect authentication is approved later, configure:
+
+```text
 Authentication__Authority=https://identity-provider.example.org/tenant
 Authentication__ClientId=<registered-application-client-id>
 Authentication__ClientSecret=<secret-from-approved-secret-store>
 Security__RequireAuthentication=true
 ```
 
-Register this redirect URI with the OpenID Connect identity provider:
+Then register this redirect URI with the identity provider:
 
 ```text
 https://psych-dashboard.example.org/signin-oidc
@@ -68,9 +77,8 @@ https://psych-dashboard.example.org/signin-oidc
 
 Never commit the client secret or place it in the deployment ZIP.
 
-The application intentionally refuses to start in Production when
-authentication is required but `Authentication__Authority` or
-`Authentication__ClientId` is missing.
+The application refuses to start only when authentication is explicitly enabled
+but `Authentication__Authority` or `Authentication__ClientId` is missing.
 
 ## Optional warehouse configuration
 
@@ -89,7 +97,8 @@ The application-pool identity needs read-only access to these files.
 After deployment:
 
 1. Browse to `https://<hostname>/health`; it should return HTTP 200.
-2. Browse to the application and verify redirection to the identity provider.
+2. Browse to the application and verify it loads. If authentication has been
+   enabled, verify redirection to the identity provider.
 3. Upload a representative workbook and verify charts, tooltips, date filters,
    PDF export, multiple-workbook chaining, and workbook clearing.
 4. Confirm that selecting Data Warehouse is the only action that reads the
