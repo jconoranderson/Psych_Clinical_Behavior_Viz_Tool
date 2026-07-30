@@ -60,6 +60,11 @@ if (requireAuthentication)
 }
 
 var app = builder.Build();
+var configuredPathBase = builder.Configuration["PathBase"]?.Trim();
+if (!string.IsNullOrWhiteSpace(configuredPathBase))
+{
+    app.UsePathBase($"/{configuredPathBase.Trim('/')}");
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

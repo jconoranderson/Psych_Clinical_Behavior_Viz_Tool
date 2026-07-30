@@ -54,8 +54,12 @@ variables, or protected IIS configuration. Double underscores represent nested
 ```text
 ASPNETCORE_ENVIRONMENT=Production
 AllowedHosts=psych-dashboard.example.org
+PathBase=/Tools/psychology_visualization_tool
 Security__RequireAuthentication=false
 ```
+
+`PathBase` must match the IIS application path. Use an empty value only when
+the application is hosted at the website root.
 
 With authentication disabled, access must be restricted through the internal
 network, IIS, or another control approved by IT.
