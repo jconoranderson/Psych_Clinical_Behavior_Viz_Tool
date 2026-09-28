@@ -1968,6 +1968,43 @@
             ?? seriesName;
     }
 
+    private Dictionary<string, string> BuildMedicationTooltipLookup(HashSet<string> allowedMeds)
+    {
+        var lookup = new Dictionary<string, string>();
+        if (!_renderedChartState.ShowMedications || _viewModel == null) return lookup;
+
+        var medicationsByDate = _viewModel.UnreducedMedications
+            .Where(m => m.Dose > 0 && allowedMeds.Contains(m.Name))
+            .GroupBy(m => m.Date.Date)
+            .ToDictionary(group => group.Key, group => group
+                .OrderByDescending(m => m.Dose)
+                .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList());
+
+        // Match the plotted X coordinate: month index, rolling target, or UTC
+        // timestamp. Cover the mounted history so navigator movement also works.
+        foreach (var point in ChartBehaviorCounts)
+        {
+            if (!medicationsByDate.TryGetValue(point.Date.Date, out var medications)) continue;
+            var key = _selectedPeriod switch
+            {
+                AggregationPeriod.Month => Convert.ToString(GetChartXValue(point), System.Globalization.CultureInfo.InvariantCulture)!,
+                AggregationPeriod.Average => point.Target,
+                _ => new DateTimeOffset(DateTime.SpecifyKind(point.Date, DateTimeKind.Utc))
+                    .ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            var rows = medications.Select(m =>
+            {
+                var name = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Name);
+                var unit = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Unit ?? "");
+                return $"<div style='font-size:11px;font-weight:normal;color:#555;'>{name}: <b>{m.Dose} {unit}</b></div>";
+            });
+            lookup[key] = "<div style='margin-top:6px;padding-top:6px;border-top:1px solid #ccc;'><b>Medications</b>" +
+                string.Join("", rows) + "</div>";
+        }
+        return lookup;
+    }
+
     private List<DailyBehaviorCount> BuildMedicationPlotData(string seriesName)
     {
         if (_viewModel == null) return new List<DailyBehaviorCount>();
@@ -2250,34 +2287,8 @@
             strokeDashArrays.Add(0);
         }
 
-        var medLookup = new Dictionary<long, string>();
-        if (_renderedChartState.ShowMedications && _viewModel?.DailyMedications != null && _viewModel.DailyMedications.Any())
-        {
-            var medDates = FilteredBehaviorCounts.Select(x => x.Date).Distinct().ToList();
-            foreach (var date in medDates)
-            {
-                var activeMeds = _viewModel.AvailableMedications
-                    .Where(medName => allowedMeds.Contains(medName))
-                    .Select(medName => _viewModel.UnreducedMedications
-                        .Where(m => m.Name.Equals(medName, StringComparison.OrdinalIgnoreCase) && m.Date.Date == date.Date)
-                        .FirstOrDefault())
-                    .Where(m => m != null && m.Dose > 0)
-                    .OrderByDescending(m => m.Dose)
-                    .ToList();
-
-                if (activeMeds.Any())
-                {
-                    var medsHtml = string.Join("<br/>", activeMeds.Select(m =>
-                    {
-                        var name = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Name);
-                        var unit = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Unit);
-                        return $"<span style='font-size: 11px; font-weight: normal; color: #555;'>{name}: <b>{m.Dose} {unit}</b></span>";
-                    }));
-                    medLookup[((DateTimeOffset)date).ToUnixTimeMilliseconds()] = medsHtml;
-                }
-            }
-        }
-        var medLookupJson = System.Text.Json.JsonSerializer.Serialize(medLookup);
+        var medLookupJson = System.Text.Json.JsonSerializer.Serialize(
+            BuildMedicationTooltipLookup(allowedMeds));
 
         var rollingStart = _startDate ?? _dateRange?.Start
             ?? _viewModel?.UnreducedBehaviorCounts.Where(x => x.Date.HasValue).MinBy(x => x.Date)?.Date;
@@ -2495,6 +2506,9 @@
 
             html += '<div style=""display:flex;justify-content:space-between;border-top:1px solid #e1e5e8;margin-top:7px;padding-top:7px;"">' +
                 '<span style=""font-weight:600;"">Total</span><strong>' + formatValue(total) + '</strong></div>';
+            var medLookup = " + medLookupJson + @";
+            var medicationKey = " + (_selectedPeriod == AggregationPeriod.Average ? "baseName" : "String(hoveredX)") + @";
+            html += medLookup[medicationKey] || '';
             html += '</div>';
             return html;
         }";
@@ -2561,14 +2575,18 @@
                         var dateStr = date.toLocaleDateString('en-US', options);
                         var header = shift ? '<b>' + dateStr + ': ' + shift + ' Shift</b>' : '<b>' + dateStr + '</b>';
 
-                        var medLookup = " + medLookupJson + @";
-                        var meds = medLookup[val];
-                        if (meds) {
-                            header += '<hr style=""margin: 6px 0; border: 0; border-top: 1px solid #ccc;"" />' + meds;
-                        }
                         return header;
                     }"
             };
+
+            // Use the same medication section for every ordinary tooltip,
+            // including numeric month coordinates and rolling categories.
+            tooltipXFormatter = @"function(val, opts) {
+                var header = (" + tooltipXFormatter + @")(val, opts);
+                var medLookup = " + medLookupJson + @";
+                var meds = medLookup[String(val)];
+                return header + (meds || '');
+            }";
 
             var monthlyCategories = ChartBehaviorCounts
                 .Select(item => item.Date.Date)
