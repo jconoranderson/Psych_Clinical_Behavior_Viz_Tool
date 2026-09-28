@@ -2892,7 +2892,18 @@
                 SeriesName = validMedsList,
                 Opposite = true,
                 Title = new AxisTitle { Text = medicationAxisTitle },
-                Labels = new YAxisLabels { Formatter = @"function(val) { var res = Math.pow(10, val); if (res <= 0.11) return '0'; return Math.round(res); }" },
+                Labels = new YAxisLabels
+                {
+                    Formatter = @"function(val) {
+                        var dose = Math.pow(10, val);
+                        if (dose <= 0.11) return '0';
+                        return dose.toLocaleString('en-US', { maximumSignificantDigits: 3 });
+                    }"
+                },
+                // More reference points on the log scale, without rounding
+                // fractional doses to whole numbers.
+                TickAmount = 12,
+                AxisTicks = new AxisTicks { Show = true },
                 ForceNiceScale = false,
                 DecimalsInFloat = 2,
                 Min = finalMin,
