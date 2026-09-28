@@ -59,28 +59,6 @@
     </MudStack>
 </MudAppBar>
 
-@if (!_useDataWarehouse && _workbookIssues.Count > 0)
-{
-    <div class="workbook-issues" role="status" aria-live="polite">
-        <details open>
-            <summary>Workbook report — @_workbookIssues.Count issue(s)</summary>
-            <p>Warnings identify skipped records. Errors prevent the upload batch from being added.</p>
-            <ul>
-                @foreach (var issue in _workbookIssues)
-                {
-                    <li><strong>@issue.Severity — @issue.FileName</strong>
-                        @if (!string.IsNullOrEmpty(issue.Sheet))
-                        {
-                            <span> · @issue.Sheet @issue.Cell</span>
-                        }
-                        <span>: @issue.Message</span>
-                    </li>
-                }
-            </ul>
-        </details>
-    </div>
-}
-
 <MudButton Variant="Variant.Outlined"
            Size="MudBlazor.Size.Small"
            StartIcon="@(_filtersOpen ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
@@ -919,7 +897,6 @@
     private readonly HashSet<string> _loadedWorkbookSignatures = new(StringComparer.Ordinal);
     private string _uploadMessage = "";
     private bool _isUploading;
-    private List<WorkbookIssue> _workbookIssues = new();
     private MudBlazor.Color _uploadMessageColor = MudBlazor.Color.Default;
 
     private AggregationPeriod _selectedPeriod = AggregationPeriod.Month;
@@ -1841,7 +1818,6 @@
     private async Task UploadWorkbooks(InputFileChangeEventArgs e)
     {
         if (_isUploading) return;
-        _workbookIssues = new();
         const int maxWorkbookCount = 25;
         const long maxWorkbookSize = 10 * 1024 * 1024;
         IReadOnlyList<IBrowserFile> files;
@@ -1882,35 +1858,25 @@
         _isUploading = true;
         StateHasChanged();
         bool batchAdded = false;
+        string? currentFileName = null;
 
         try
         {
             var parsedBatch = new List<ParsedWorkbookResult>();
             foreach (var file in files)
             {
-                try
-                {
-                    using var stream = file.OpenReadStream(maxWorkbookSize);
-                    using var ms = new MemoryStream();
-                    await stream.CopyToAsync(ms);
-                    ms.Position = 0;
-                    parsedBatch.Add(await ExcelParsingService.ParseWorkbookAsync(ms, file.Name));
-                }
-                catch (Exception ex)
-                {
-                    LoggerFactory.CreateLogger("WorkbookUpload").LogError(ex, "Workbook could not be read");
-                    parsedBatch.Add(new ParsedWorkbookResult
-                    {
-                        SourceFileName = file.Name,
-                        Issues = new() { new(file.Name, "", "", WorkbookIssueSeverity.Error,
-                            "The file could not be read. Check that it is a valid, unencrypted Excel workbook, then save and upload it again.") }
-                    });
-                }
+                currentFileName = file.Name;
+                using var stream = file.OpenReadStream(maxWorkbookSize);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                ms.Position = 0;
+                var parsed = await ExcelParsingService.ParseWorkbookAsync(ms);
+                if (parsed.Behaviors.Count == 0)
+                    throw new InvalidDataException("No readable behavior data was found.");
+                parsedBatch.Add(parsed);
             }
 
-            var merged = WorkbookMergeService.Merge(_parsedWorkbook, parsedBatch);
-            _parsedWorkbook = merged;
-            _workbookIssues = merged.Issues.ToList();
+            _parsedWorkbook = WorkbookMergeService.Merge(_parsedWorkbook, parsedBatch);
             batchAdded = true;
             foreach (var file in files)
             {
@@ -1918,8 +1884,8 @@
                     $"{file.Name}|{file.Size}|{file.LastModified.UtcDateTime:O}");
             }
 
-            _uploadMessage = BuildWorkbookSummary() + (_workbookIssues.Count > 0 ? " • Loaded with warnings; see workbook report." : "");
-            _uploadMessageColor = _workbookIssues.Count > 0 ? MudBlazor.Color.Warning : MudBlazor.Color.Success;
+            _uploadMessage = BuildWorkbookSummary();
+            _uploadMessageColor = MudBlazor.Color.Success;
             ClearChartZoomBaseline();
             _selectedResident = null;
             _useDataWarehouse = false;
@@ -1939,19 +1905,13 @@
             _chartRevision++;
             await InvokeAsync(StateHasChanged);
         }
-        catch (WorkbookValidationException ex)
-        {
-            _workbookIssues = ex.Issues.Distinct().ToList();
-            _uploadMessage = "No files from this batch were added. Previously loaded data is unchanged. See the workbook report.";
-            _uploadMessageColor = MudBlazor.Color.Error;
-        }
         catch (Exception ex)
         {
             LoggerFactory.CreateLogger("WorkbookUpload")
                 .LogError(ex, "Workbook batch upload or chart refresh failed");
             _uploadMessage = batchAdded
                 ? "The workbooks were loaded, but the chart could not be refreshed. Clear the workbooks and try again."
-                : "The workbooks could not be processed. No files from this batch were added.";
+                : $"Could not load {currentFileName ?? "the workbook"}. Check that it is an unencrypted behavior workbook with readable data. No files from this batch were added.";
             _uploadMessageColor = MudBlazor.Color.Error;
         }
         finally
@@ -1966,7 +1926,6 @@
         ClearChartZoomBaseline();
         _parsedWorkbook = null;
         _loadedWorkbookSignatures.Clear();
-        _workbookIssues.Clear();
         _uploadMessage = "";
         _selectedResident = null;
         await LoadDataAsync();

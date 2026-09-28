@@ -5,14 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ExcelDataReader;
+using PsychDashboard.Services;
 
 namespace PsychDashboard.Services
 {
     public class ParsedWorkbookResult
     {
-        public string SourceFileName { get; set; } = "";
-        public string ResidentName { get; set; } = "";
-        public List<WorkbookIssue> Issues { get; set; } = new();
         public List<PatientHistoryService.BehaviorCsvRow> Behaviors { get; set; } = new();
         public List<PsychDashboard.Models.Medication> Medications { get; set; } = new();
         public List<string> IntensityLabels { get; set; } = new();
@@ -29,25 +27,22 @@ namespace PsychDashboard.Services
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         }
 
-        public Task<ParsedWorkbookResult> ParseWorkbookAsync(Stream fileStream, string fileName = "Workbook")
+        public Task<ParsedWorkbookResult> ParseWorkbookAsync(Stream fileStream)
         {
             using var reader = ExcelReaderFactory.CreateReader(fileStream);
             using var data = reader.AsDataSet(new ExcelDataSetConfiguration
             {
                 ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
             });
-            return Task.FromResult(ParseDataSet(data, fileName));
+            return Task.FromResult(ParseDataSet(data));
         }
 
-        internal ParsedWorkbookResult ParseDataSet(DataSet result, string fileName)
+        internal ParsedWorkbookResult ParseDataSet(DataSet result)
         {
-            var results = new ParsedWorkbookResult { SourceFileName = fileName };
-            string studentName = "";
-            string personId = "";
-            int startYear = 0;
-            void Report(string sheet, int row, int column, string message,
-                WorkbookIssueSeverity severity = WorkbookIssueSeverity.Warning) =>
-                results.Issues.Add(new(fileName, sheet, CellAddress(row, column), severity, message));
+            var results = new ParsedWorkbookResult();
+            string studentName = "Unknown Student";
+            string personId = "Unknown ID";
+            int startYear = DateTime.Now.Year;
 
             // 1. Extract Student Info
             if (result.Tables.Contains("STUDENT INFO"))
@@ -55,7 +50,7 @@ namespace PsychDashboard.Services
                 var infoTable = result.Tables["STUDENT INFO"]!;
                 if (infoTable.Rows.Count > 0 && infoTable.Columns.Count > 0)
                 {
-                    studentName = infoTable.Rows[0][0]?.ToString()?.Trim() ?? "";
+                    studentName = infoTable.Rows[0][0]?.ToString() ?? "Unknown Student";
                     personId = studentName; // In old system they sometimes just used name, or we can look for ID
                 }
             }
@@ -131,28 +126,13 @@ namespace PsychDashboard.Services
                 }
             }
 
-            results.ResidentName = studentName;
-            if (string.IsNullOrWhiteSpace(studentName))
-                Report("STUDENT INFO", 0, 0, "Resident name is missing. Enter the resident name before uploading.", WorkbookIssueSeverity.Error);
-            if (!yearFound || startYear < 2000 || startYear > 2099)
-                Report("YiVis", 4, 1, "A valid school year (2000–2099) is required in YiVis B5 or a month notes sheet B4.", WorkbookIssueSeverity.Error);
-            if (!MonthSheets.Any(result.Tables.Contains))
-                Report("", -1, -1, "No supported monthly sheets were found. Use the behavior workbook template.", WorkbookIssueSeverity.Error);
-            if (results.Issues.Any(issue => issue.Severity == WorkbookIssueSeverity.Error))
-                return results;
-
-            bool schemaInitialized = false;
             // 2. Extract Data from Monthly Sheets
             foreach (var sheetName in MonthSheets)
             {
                 if (result.Tables.Contains(sheetName))
                 {
                     var table = result.Tables[sheetName]!;
-                    if (table.Rows.Count < 3 || table.Columns.Count < 22)
-                    {
-                        Report(sheetName, -1, -1, "The monthly sheet is missing required headers or target columns.", WorkbookIssueSeverity.Error);
-                        continue;
-                    }
+                    if (table.Rows.Count < 2 || table.Columns.Count < 4) continue;
 
                     var row0 = table.Rows[0]; // Target names
                     var row1 = table.Rows[1]; // Metric group headers
@@ -171,29 +151,6 @@ namespace PsychDashboard.Services
                         }
                     }
 
-                    foreach (var block in targetBlocks)
-                    {
-                        var duration = ReadMetricBuckets(bucketHeaderRow, bucketHeaderRow, block.StartCol + 6, 6,
-                            new[] { "Not Specified", "<5 min", "6-10 min", "11-20 min", "21-30 min", "31-60 min" }, hasDedicatedBucketHeaderRow);
-                        var intensity = ReadMetricBuckets(bucketHeaderRow, bucketHeaderRow, block.StartCol + 12, 5,
-                            new[] { "Not Specified", "1", "2", "3", "4" }, hasDedicatedBucketHeaderRow);
-                        if (duration.Labels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != duration.Labels.Count ||
-                            intensity.Labels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != intensity.Labels.Count)
-                            Report(sheetName, 2, block.StartCol,
-                                "Bucket labels must be unique within each metric. Correct duplicate intensity or duration labels.", WorkbookIssueSeverity.Error);
-                        if (schemaInitialized &&
-                            (!results.DurationLabels.SequenceEqual(duration.Labels, StringComparer.OrdinalIgnoreCase) ||
-                             !results.IntensityLabels.SequenceEqual(intensity.Labels, StringComparer.OrdinalIgnoreCase)))
-                            Report(sheetName, 2, block.StartCol,
-                                "Intensity or duration labels differ between targets or months. Use the same labels in the same order throughout this workbook.", WorkbookIssueSeverity.Error);
-                        else if (!schemaInitialized)
-                        {
-                            results.DurationLabels = duration.Labels;
-                            results.IntensityLabels = intensity.Labels;
-                            schemaInitialized = true;
-                        }
-                    }
-
                     // Determine month number
                     int monthNum = GetMonthNum(sheetName);
                     // If month is Jan-June, it's startYear + 1
@@ -201,19 +158,12 @@ namespace PsychDashboard.Services
 
                     int lastValidDayNum = -1;
 
-                    // Row 3 contains bucket headers; observations start on row 4.
-                    for (int r = 3; r < table.Rows.Count; r++)
+                    // Process daily rows (starting at row 2)
+                    for (int r = 2; r < table.Rows.Count; r++)
                     {
                         var row = table.Rows[r];
                         var dateStr = row[0]?.ToString();
                         int dayNum;
-                        var hasEnteredData = IsTruthy(row[3]) || !string.IsNullOrWhiteSpace(row[2]?.ToString()) ||
-                            targetBlocks.Any(block => Enumerable.Range(block.StartCol + 3, 14).Any(column =>
-                            {
-                                var text = row[column]?.ToString();
-                                return !string.IsNullOrWhiteSpace(text) &&
-                                    (!double.TryParse(text, out var value) || value != 0);
-                            }));
 
                         if (string.IsNullOrWhiteSpace(dateStr))
                         {
@@ -224,7 +174,6 @@ namespace PsychDashboard.Services
                             }
                             else
                             {
-                                if (hasEnteredData) Report(sheetName, r, 0, "Missing day; this shift was skipped.");
                                 continue;
                             }
                         }
@@ -241,8 +190,6 @@ namespace PsychDashboard.Services
                             {
                                 break;
                             }
-                            lastValidDayNum = -1;
-                            if (hasEnteredData) Report(sheetName, r, 0, "Invalid day; this shift was skipped.");
                             continue;
                         }
 
@@ -251,18 +198,9 @@ namespace PsychDashboard.Services
                         {
                             date = new DateTime(currentYear, monthNum, dayNum);
                         }
-                        catch (ArgumentOutOfRangeException)
-                        {
-                            if (hasEnteredData) Report(sheetName, r, 0, "Day is invalid for this month; this shift was skipped.");
-                            continue;
-                        }
+                        catch { continue; } // Invalid date (e.g. Feb 31)
 
-                        var shiftStr = row[1]?.ToString()?.Trim();
-                        if (hasEnteredData && GetTimeFromShift(shiftStr) == null)
-                        {
-                            Report(sheetName, r, 1, "Unrecognized shift; use 7-3, 3-11, or 11-7. This shift was skipped.");
-                            continue;
-                        }
+                        var shiftStr = row[1]?.ToString();
                         var noDataStr = row[2]?.ToString();
                         // Workbook versions differ here: some use a dedicated
                         // checkbox/formula in column D, while others write
@@ -299,12 +237,13 @@ namespace PsychDashboard.Services
                         var parsedTargets = targetBlocks.Select(block =>
                         {
                             var frequencyText = row[block.StartCol + 3]?.ToString();
-                            var isBlank = string.IsNullOrWhiteSpace(frequencyText);
-                            var isValid = double.TryParse(frequencyText, out var frequency) &&
-                                double.IsFinite(frequency) && frequency >= 0 && frequency <= int.MaxValue && frequency == Math.Truncate(frequency);
-                            if (!isBlank && !isValid)
-                                Report(sheetName, r, block.StartCol + 3, "Frequency must be a nonnegative whole number; this target observation was skipped.");
-                            return new { Block = block, Frequency = isValid ? (double?)frequency : null, Invalid = !isBlank && !isValid };
+                            return new
+                            {
+                                Block = block,
+                                Frequency = double.TryParse(frequencyText, out var frequency)
+                                    ? (double?)frequency
+                                    : null
+                            };
                         }).ToList();
 
                         // Workbook templates contain preformatted future rows whose
@@ -318,26 +257,8 @@ namespace PsychDashboard.Services
                         // Process each target block
                         foreach (var parsedTarget in parsedTargets)
                         {
-                            if (parsedTarget.Invalid) continue;
                             var block = parsedTarget.Block;
                             int b = block.StartCol;
-                            bool invalidBuckets = false;
-                            for (int column = b + 6; column < b + 17; column++)
-                            {
-                                var text = row[column]?.ToString();
-                                if (string.IsNullOrWhiteSpace(text)) continue;
-                                if (!double.TryParse(text, out var count) || !double.IsFinite(count) || count < 0 || count > int.MaxValue || count != Math.Truncate(count))
-                                {
-                                    Report(sheetName, r, column, "Bucket count must be a nonnegative whole number; this target observation was skipped.");
-                                    invalidBuckets = true;
-                                }
-                                else if (count > 0 && string.IsNullOrWhiteSpace(bucketHeaderRow[column]?.ToString()))
-                                {
-                                    Report(sheetName, r, column, "A bucket count has no label; this target observation was skipped. Add a matching header.");
-                                    invalidBuckets = true;
-                                }
-                            }
-                            if (invalidBuckets) continue;
                             var durationBuckets = ReadMetricBuckets(
                                 bucketHeaderRow, row, b + 6, 6,
                                 new[] { "Not Specified", "<5 min", "6-10 min", "11-20 min", "21-30 min", "31-60 min" },
@@ -347,6 +268,8 @@ namespace PsychDashboard.Services
                                 new[] { "Not Specified", "1", "2", "3", "4" },
                                 hasDedicatedBucketHeaderRow);
 
+                            AddDistinctLabels(results.DurationLabels, durationBuckets.Labels);
+                            AddDistinctLabels(results.IntensityLabels, intensityBuckets.Labels);
 
                             var csvRow = new PatientHistoryService.BehaviorCsvRow
                             {
@@ -409,10 +332,11 @@ namespace PsychDashboard.Services
                         // Remove shifts appended via {}
                         if (doseStr.Contains("{")) doseStr = doseStr.Split('{')[0].Trim();
 
-                        if (double.TryParse(doseStr, out double dose) && double.IsFinite(dose) && dose >= 0)
+                        if (double.TryParse(doseStr, out double dose))
                         {
                             int month = (rowIdx - 3 + 6) % 12 + 1; // row 3 is July (7)
                             int year = (month >= 7) ? startYear : startYear + 1;
+                            int daysInMonth = DateTime.DaysInMonth(year, month);
 
                             results.Medications.Add(new PsychDashboard.Models.Medication
                             {
@@ -422,8 +346,6 @@ namespace PsychDashboard.Services
                                 EndDate = new DateTime(year, month, 15, 23, 59, 59)
                             });
                         }
-                        else
-                            Report("Year Custom Med", rowIdx, c, "Dose must be a finite, nonnegative number; this medication entry was skipped.");
                     }
                 }
             }
@@ -446,15 +368,10 @@ namespace PsychDashboard.Services
 
                 foreach (var mc in medCols)
                 {
-                    if (mc.NameCol >= table.Columns.Count || table.Rows.Count <= mc.R1) continue;
+                    if (mc.Y2 >= table.Columns.Count || table.Rows.Count <= mc.R1) continue;
 
                     var medName = table.Rows[mc.R1][mc.NameCol]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(medName) || medName.Contains("Insert")) continue;
-                    if (mc.Y2 >= table.Columns.Count)
-                    {
-                        Report("MEDICATIONS", mc.R1, mc.NameCol, "Medication columns are incomplete; this medication was skipped.");
-                        continue;
-                    }
 
                     for (int j = 4; j < 32; j++) // Rows 5 to 32 (0-indexed 4 to 31)
                     {
@@ -464,17 +381,13 @@ namespace PsychDashboard.Services
                         if (string.IsNullOrWhiteSpace(doseStr)) continue;
                         if (doseStr.Contains("{")) doseStr = doseStr.Split('{')[0].Trim();
 
-                        if (!double.TryParse(doseStr, out double dose) || !double.IsFinite(dose) || dose < 0)
-                        {
-                            Report("MEDICATIONS", j, mc.Dose, "Dose must be a finite, nonnegative number; this medication entry was skipped.");
-                            continue;
-                        }
+                        if (!double.TryParse(doseStr, out double dose)) continue;
+
                         var unitStr = table.Rows[j][mc.Unit]?.ToString();
+
+                        // Invalid medication dates must not abort an otherwise readable workbook.
                         if (!TryMedicationDate(table.Rows[j], mc.M1, mc.D1, mc.Y1, false, out var startDate))
-                        {
-                            Report("MEDICATIONS", j, mc.M1, "Invalid or incomplete start date; this medication entry was skipped. Enter a month and year, and a valid day if specified.");
                             continue;
-                        }
 
                         DateTime endDate;
                         bool hasEndDate = new[] { mc.M2, mc.D2, mc.Y2 }
@@ -482,10 +395,7 @@ namespace PsychDashboard.Services
                         if (hasEndDate)
                         {
                             if (!TryMedicationDate(table.Rows[j], mc.M2, mc.D2, mc.Y2, true, out endDate) || endDate < startDate)
-                            {
-                                Report("MEDICATIONS", j, mc.M2, "Invalid, incomplete, or reversed end date; this medication entry was skipped. Enter a month and year, and a valid day if specified, or leave the entire end date blank for an ongoing medication.");
                                 continue;
-                            }
                         }
                         else
                         {
@@ -512,18 +422,7 @@ namespace PsychDashboard.Services
             // The warehouse supplies its separately normalized Target_Clean field,
             // but local workbooks must retain each distinct behavior label.
 
-            if (!results.Behaviors.Any(row => row.Target != "*"))
-                Report("", -1, -1, "No valid behavior observations were found. Check target names, dates, shifts and frequency entries.", WorkbookIssueSeverity.Error);
             return results;
-        }
-
-        private static string CellAddress(int row, int column)
-        {
-            if (row < 0 || column < 0) return "";
-            var letters = "";
-            for (int value = column + 1; value > 0; value = (value - 1) / 26)
-                letters = (char)('A' + (value - 1) % 26) + letters;
-            return $"{letters}{row + 1}";
         }
 
         private static bool TryMedicationDate(DataRow row, int monthColumn, int dayColumn,
@@ -624,6 +523,15 @@ namespace PsychDashboard.Services
             var normalized = new string(label.Where(char.IsLetterOrDigit).ToArray());
             return normalized.Equals("NotSpecified", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Unspecified", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddDistinctLabels(List<string> destination, IEnumerable<string> labels)
+        {
+            foreach (var label in labels)
+            {
+                if (!destination.Contains(label, StringComparer.OrdinalIgnoreCase))
+                    destination.Add(label);
+            }
         }
 
         private TimeSpan? GetTimeFromShift(string? shift)

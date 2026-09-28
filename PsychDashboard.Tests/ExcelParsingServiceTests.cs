@@ -11,36 +11,24 @@ public sealed class ExcelParsingServiceTests
     private readonly ExcelParsingService _parser = new();
 
     [Fact]
-    public async Task ExcelStreamPreservesWarningLocationAndValidData()
+    public async Task ExcelStreamLoadsRepeatedAndDifferentHeaders()
     {
         using var data = Workbook();
-        data.Tables["MEDICATIONS"]!.Rows[4][5] = "8";
+        var july = data.Tables["July"]!;
+        july.Rows[2][17] = "Low";
+        var august = july.Copy();
+        august.TableName = "Aug";
+        august.Rows[2][17] = "Critical";
+        data.Tables.Add(august);
         using var stream = WriteXlsx(data);
 
-        var result = await _parser.ParseWorkbookAsync(stream, "stream.xlsx");
+        var result = await _parser.ParseWorkbookAsync(stream);
+        var merged = WorkbookMergeService.Merge(null, [result]);
 
-        Assert.Single(result.Behaviors);
-        Assert.Empty(result.Medications);
-        var issue = Assert.Single(result.Issues);
-        Assert.Equal("stream.xlsx", issue.FileName);
-        Assert.Equal("F5", issue.Cell);
-    }
-
-    [Fact]
-    public void ValidWorkbookLoadsWithoutIssuesAndMedicationIsParsedOnce()
-    {
-        using var data = Workbook();
-        var august = data.Tables["July"]!.Copy();
-        august.TableName = "Aug";
-        data.Tables.Add(august);
-
-        var result = _parser.ParseDataSet(data, "valid.xlsx");
-
-        Assert.Empty(result.Issues);
-        Assert.Equal(2, result.Behaviors.Count);
+        Assert.Equal(2, merged.Behaviors.Count);
         Assert.Single(result.Medications);
-        Assert.Equal(new DateTime(2024, 8, 1), result.Medications[0].EndDate);
-        Assert.Equal(new[] { "Low", "High" }, result.IntensityLabels);
+        Assert.Contains("Critical", merged.IntensityLabels);
+        Assert.All(merged.Behaviors, row => Assert.Equal(2, row.Episode_Count));
     }
 
     [Theory]
@@ -50,7 +38,7 @@ public sealed class ExcelParsingServiceTests
     [InlineData("6", "1", "2024")]
     [InlineData("", "1", "2024")]
     [InlineData("8", "oops", "2024")]
-    public void InvalidEndDateSkipsOnlyThatMedicationAndReportsLocation(string month, string day, string year)
+    public void InvalidMedicationEndDateDoesNotPreventWorkbookLoading(string month, string day, string year)
     {
         using var data = Workbook();
         var meds = data.Tables["MEDICATIONS"]!;
@@ -60,16 +48,10 @@ public sealed class ExcelParsingServiceTests
         meds.Rows.Add(meds.Rows[4].ItemArray);
         meds.Rows[5][5] = meds.Rows[5][6] = meds.Rows[5][7] = "";
 
-        var result = _parser.ParseDataSet(data, "dates.xlsx");
+        var result = _parser.ParseDataSet(data);
 
         Assert.Single(result.Behaviors);
         Assert.Single(result.Medications);
-        var issue = Assert.Single(result.Issues);
-        Assert.Equal("dates.xlsx", issue.FileName);
-        Assert.Equal("MEDICATIONS", issue.Sheet);
-        Assert.Equal("F5", issue.Cell);
-        Assert.Equal(WorkbookIssueSeverity.Warning, issue.Severity);
-        Assert.Contains("end date", issue.Message);
     }
 
     [Fact]
@@ -78,77 +60,26 @@ public sealed class ExcelParsingServiceTests
         using var data = Workbook();
         data.Tables["MEDICATIONS"]!.Rows[4][5] = "2";
         data.Tables["MEDICATIONS"]!.Rows[4][7] = "2025";
-        var result = _parser.ParseDataSet(data, "month.xlsx");
-        Assert.Empty(result.Issues);
+        var result = _parser.ParseDataSet(data);
         Assert.Equal(new DateTime(2025, 2, 28), Assert.Single(result.Medications).EndDate);
     }
 
-    [Theory]
-    [InlineData(0, "32", "A5")]
-    [InlineData(0, "typo", "A5")]
-    [InlineData(1, "unknown", "B5")]
-    [InlineData(7, "-1", "H5")]
-    [InlineData(7, "NaN", "H5")]
-    [InlineData(7, "oops", "H5")]
-    [InlineData(16, "-2", "Q5")]
-    public void BadObservationReportsCellAndPreservesGoodObservation(int column, string value, string cell)
+    [Fact]
+    public void MissingMetadataRetainsPreviousFallbacks()
     {
         using var data = Workbook();
-        var month = data.Tables["July"]!;
-        month.Rows.Add(month.Rows[3].ItemArray);
-        month.Rows[4][column] = value;
-        var result = _parser.ParseDataSet(data, "observations.xlsx");
-
+        data.Tables.Remove("STUDENT INFO");
+        data.Tables.Remove("YiVis");
+        var result = _parser.ParseDataSet(data);
         Assert.Single(result.Behaviors);
-        Assert.Contains(result.Issues, issue => issue.Sheet == "July" && issue.Cell == cell && issue.Severity == WorkbookIssueSeverity.Warning);
+        Assert.Equal(DateTime.Now.Year, result.Behaviors[0].Date!.Value.Year);
     }
 
     [Fact]
-    public void DuplicateBucketLabelsAreReported()
+    public async Task UnreadableFileFailsInsteadOfReturningSuccessfulImport()
     {
-        using var data = Workbook();
-        data.Tables["July"]!.Rows[2][17] = "Low";
-        var result = _parser.ParseDataSet(data, "duplicates.xlsx");
-        Assert.Contains(result.Issues, issue => issue.Severity == WorkbookIssueSeverity.Error && issue.Message.Contains("unique"));
-    }
-
-    [Fact]
-    public void ConflictingMonthLabelsBlockMerge()
-    {
-        using var data = Workbook();
-        var august = data.Tables["July"]!.Copy();
-        august.TableName = "Aug";
-        august.Rows[2][17] = "Critical";
-        data.Tables.Add(august);
-        var result = _parser.ParseDataSet(data, "labels.xlsx");
-        Assert.Contains(result.Issues, issue => issue.Sheet == "Aug" && issue.Severity == WorkbookIssueSeverity.Error);
-        Assert.Throws<WorkbookValidationException>(() => WorkbookMergeService.Merge(null, [result]));
-    }
-
-    [Theory]
-    [InlineData("STUDENT INFO")]
-    [InlineData("YiVis")]
-    [InlineData("July")]
-    public void MissingRequiredMetadataBlocksImport(string sheet)
-    {
-        using var data = Workbook();
-        data.Tables.Remove(sheet);
-        var result = _parser.ParseDataSet(data, "missing.xlsx");
-        Assert.Contains(result.Issues, issue => issue.Severity == WorkbookIssueSeverity.Error);
-        Assert.Empty(result.Behaviors);
-    }
-
-    [Fact]
-    public void BlankFutureRowsDoNotGenerateWarnings()
-    {
-        using var data = Workbook();
-        var month = data.Tables["July"]!;
-        month.Rows.Add();
-        month.Rows[4][0] = "32";
-        month.Rows[4][7] = "0";
-        var result = _parser.ParseDataSet(data, "template.xlsx");
-        Assert.Empty(result.Issues);
-        Assert.Single(result.Behaviors);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Not an Excel workbook"));
+        await Assert.ThrowsAnyAsync<Exception>(() => _parser.ParseWorkbookAsync(stream));
     }
 
     private static DataSet Workbook()
