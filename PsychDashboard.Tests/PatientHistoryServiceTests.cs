@@ -136,6 +136,17 @@ public sealed class PatientHistoryServiceTests
         Assert.Equal(lastBehaviorDate, model.UnreducedMedications.Max(item => item.Date));
     }
 
+    [Fact]
+    public async Task EmptyShiftSelectionReturnsNoObservationsButNullIncludesAll()
+    {
+        var rows = new List<PatientHistoryService.BehaviorCsvRow> { Row(new DateTime(2025, 1, 1), 2) };
+        var empty = await _service.GetPatientHistoryFromRecordsAsync(rows, [], AggregationPeriod.Day, new HashSet<string>());
+        var all = await _service.GetPatientHistoryFromRecordsAsync(rows, [], AggregationPeriod.Day);
+        Assert.Empty(empty.DailyBehaviorCounts);
+        Assert.Single(all.DailyBehaviorCounts);
+        Assert.NotEmpty(empty.AvailableTargets);
+    }
+
     private async Task<List<PsychDashboard.ViewModels.DailyBehaviorCount>> Aggregate(
         List<PatientHistoryService.BehaviorCsvRow> rows,
         AggregationPeriod period)

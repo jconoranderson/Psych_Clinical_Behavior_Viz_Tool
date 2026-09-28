@@ -357,3 +357,19 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+.workbook-issues {
+    margin: 0.75rem 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #b77700;
+    border-radius: 4px;
+    background: #fff8e6;
+    overflow-wrap: anywhere;
+}
+
+.workbook-issues ul {
+    max-height: 18rem;
+    overflow-y: auto;
+    padding-left: 1.5rem;
+}
+
+.workbook-issues li { margin-top: 0.5rem; }

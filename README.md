@@ -40,6 +40,17 @@ By transforming dense relational data into interactive visual insights, the tool
    ```
 4. Open your browser to the URL indicated in your terminal (usually `http://localhost:5000` or `https://localhost:5001`).
 
+## Workbook validation
+
+Local uploads can combine multiple years for one resident. All workbooks must use the same intensity and duration labels in the same order, including across targets and monthly sheets. Clear the loaded workbooks before switching residents or loading a different bucket scheme.
+
+After an upload, the workbook report lists problems by file, sheet, and cell where available:
+
+- **Warnings:** Invalid observations or medication entries are skipped; valid records load. Correct the reported cells, clear the loaded workbooks, and upload the corrected files to replace them.
+- **Errors:** Missing resident/year metadata, unsupported or incomplete sheets, incompatible labels, mixed residents, unreadable files, or a workbook with no valid behavior observations prevent the entire batch from being added. Previously loaded data remains available.
+
+Medication dates require a month and year. A blank start day means the first of the month; a blank end day means the last day. Leave all three end-date cells blank for an ongoing medication. Incomplete, invalid, or reversed dates are reported and skipped.
+
 ## Technologies Used
 
 - [ASP.NET Core Blazor](https://dotnet.microsoft.com/en-us/apps/aspnet/web-apps/blazor)

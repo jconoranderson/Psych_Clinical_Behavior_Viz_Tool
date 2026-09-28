@@ -156,7 +156,7 @@ namespace PsychDashboard.Services
 
                 // Apply shift filter if provided
                 var filteredRecords = validRecords;
-                if (selectedShifts != null && selectedShifts.Any())
+                if (selectedShifts != null)
                 {
                     filteredRecords = filteredRecords
                         .Where(r => selectedShifts.Contains(GetShift(r.Time)))
