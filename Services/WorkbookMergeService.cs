@@ -27,6 +27,14 @@ public static class WorkbookMergeService
                 .DistinctBy(medication => JsonSerializer.Serialize(medication))
                 .OrderBy(medication => medication.StartDate)
                 .ThenBy(medication => medication.Name)
+                .ToList(),
+            IntensityLabels = sources
+                .SelectMany(source => source.IntensityLabels)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            DurationLabels = sources
+                .SelectMany(source => source.DurationLabels)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList()
         };
     }

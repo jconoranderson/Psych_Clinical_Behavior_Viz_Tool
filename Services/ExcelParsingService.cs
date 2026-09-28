@@ -13,6 +13,8 @@ namespace PsychDashboard.Services
     {
         public List<PatientHistoryService.BehaviorCsvRow> Behaviors { get; set; } = new();
         public List<PsychDashboard.Models.Medication> Medications { get; set; } = new();
+        public List<string> IntensityLabels { get; set; } = new();
+        public List<string> DurationLabels { get; set; } = new();
     }
 
     public class ExcelParsingService
@@ -133,7 +135,9 @@ namespace PsychDashboard.Services
                         if (table.Rows.Count < 2) continue;
 
                         var row0 = table.Rows[0]; // Target names
-                        var row1 = table.Rows[1]; // Column headers
+                        var row1 = table.Rows[1]; // Metric group headers
+                        var bucketHeaderRow = table.Rows.Count > 2 ? table.Rows[2] : row1; // Actual per-person bins
+                        var hasDedicatedBucketHeaderRow = table.Rows.Count > 2;
                         
                         // Find how many targets we have
                         // Block starts at col 4, each block is 18 cols wide
@@ -141,9 +145,9 @@ namespace PsychDashboard.Services
                         for (int c = 4; c < table.Columns.Count - 17; c += 18)
                         {
                             var tName = row0[c]?.ToString()?.Trim();
-                            if (!string.IsNullOrEmpty(tName) && tName != "Select Target" && !tName.StartsWith("Select Target"))
+                            if (IsWorkbookBehaviorName(tName))
                             {
-                                targetBlocks.Add((tName, c));
+                                targetBlocks.Add((tName!, c));
                             }
                         }
 
@@ -198,12 +202,24 @@ namespace PsychDashboard.Services
 
                             var shiftStr = row[1]?.ToString();
                             var noDataStr = row[2]?.ToString();
+                            // Workbook versions differ here: some use a dedicated
+                            // checkbox/formula in column D, while others write
+                            // "No Behaviors" in column C alongside the missing-data
+                            // statuses. Both represent a recorded zero-frequency
+                            // observation and must not be mistaken for a blank
+                            // preformatted future row.
+                            var behaviorNone = IsTruthy(row[3]) ||
+                                (!string.IsNullOrWhiteSpace(noDataStr) &&
+                                 noDataStr.Contains("No Behaviors", StringComparison.OrdinalIgnoreCase));
 
-                            bool noData = !string.IsNullOrEmpty(noDataStr) && (noDataStr.Contains("No Data") || noDataStr.Contains("LOA"));
-                            bool loa = !string.IsNullOrEmpty(noDataStr) && noDataStr.Contains("LOA");
+                            bool noData = !string.IsNullOrEmpty(noDataStr) &&
+                                (noDataStr.Contains("No Data", StringComparison.OrdinalIgnoreCase) ||
+                                 noDataStr.Contains("LOA", StringComparison.OrdinalIgnoreCase));
+                            bool loa = !string.IsNullOrEmpty(noDataStr) &&
+                                noDataStr.Contains("LOA", StringComparison.OrdinalIgnoreCase);
 
-                            // If no targets were selected but we have a day row, we might just add a no-data row
-                            if (targetBlocks.Count == 0 && noData)
+                            // No Data/LOA is missing data, not a zero-frequency observation.
+                            if (noData)
                             {
                                 results.Behaviors.Add(new PatientHistoryService.BehaviorCsvRow
                                 {
@@ -218,17 +234,42 @@ namespace PsychDashboard.Services
                                 continue;
                             }
 
-                            // Process each target block
-                            foreach (var block in targetBlocks)
+                            var parsedTargets = targetBlocks.Select(block =>
                             {
-                                int b = block.StartCol;
-                                
-                                var freqStr = row[b + 3]?.ToString();
-                                double? freq = null;
-                                if (double.TryParse(freqStr, out double f)) freq = f;
+                                var frequencyText = row[block.StartCol + 3]?.ToString();
+                                return new
+                                {
+                                    Block = block,
+                                    Frequency = double.TryParse(frequencyText, out var frequency)
+                                        ? (double?)frequency
+                                        : null
+                                };
+                            }).ToList();
 
-                                // Some data might just have no data for this specific target on this shift
-                                // We include it if freq > 0 or if there's no data for the whole shift
+                            // Workbook templates contain preformatted future rows whose
+                            // formulas can evaluate to zero. They are not observations.
+                            // A checked "no behaviors" cell makes an all-zero shift valid;
+                            // otherwise at least one target must contain a positive count.
+                            var hasBehaviorOccurrence = parsedTargets.Any(item => item.Frequency > 0);
+                            if (!behaviorNone && !hasBehaviorOccurrence)
+                                continue;
+
+                            // Process each target block
+                            foreach (var parsedTarget in parsedTargets)
+                            {
+                                var block = parsedTarget.Block;
+                                int b = block.StartCol;
+                                var durationBuckets = ReadMetricBuckets(
+                                    bucketHeaderRow, row, b + 6, 6,
+                                    new[] { "Not Specified", "<5 min", "6-10 min", "11-20 min", "21-30 min", "31-60 min" },
+                                    hasDedicatedBucketHeaderRow);
+                                var intensityBuckets = ReadMetricBuckets(
+                                    bucketHeaderRow, row, b + 12, 5,
+                                    new[] { "Not Specified", "1", "2", "3", "4" },
+                                    hasDedicatedBucketHeaderRow);
+
+                                AddDistinctLabels(results.DurationLabels, durationBuckets.Labels);
+                                AddDistinctLabels(results.IntensityLabels, intensityBuckets.Labels);
                                 
                                 var csvRow = new PatientHistoryService.BehaviorCsvRow
                                 {
@@ -236,23 +277,26 @@ namespace PsychDashboard.Services
                                     Time = GetTimeFromShift(shiftStr),
                                     Target = block.TargetName,
                                     Subcategory = row[b]?.ToString(),
-                                    Episode_Count = freq,
+                                    // Once a shift is known to be recorded, an empty target
+                                    // is a meaningful zero relative to the other targets.
+                                    Episode_Count = parsedTarget.Frequency ?? 0,
                                     Duration_Specific = row[b + 4]?.ToString(),
                                     Time_Sample_Percent = TryParseDouble(row[b + 5]?.ToString()),
-                                    Duration_01_Count = TryParseDouble(row[b + 6]?.ToString()),
-                                    Duration_02_Count = TryParseDouble(row[b + 7]?.ToString()),
-                                    Duration_03_Count = TryParseDouble(row[b + 8]?.ToString()),
-                                    Duration_04_Count = TryParseDouble(row[b + 9]?.ToString()),
-                                    Duration_05_Count = TryParseDouble(row[b + 10]?.ToString()),
-                                    Duration_06_Count = TryParseDouble(row[b + 11]?.ToString()),
-                                    Intensity_01_Count = TryParseDouble(row[b + 12]?.ToString()),
-                                    Intensity_02_Count = TryParseDouble(row[b + 13]?.ToString()),
-                                    Intensity_03_Count = TryParseDouble(row[b + 14]?.ToString()),
-                                    Intensity_04_Count = TryParseDouble(row[b + 15]?.ToString()),
-                                    Intensity_05_Count = TryParseDouble(row[b + 16]?.ToString()),
+                                    Duration_01_Count = durationBuckets.Values.ElementAtOrDefault(0),
+                                    Duration_02_Count = durationBuckets.Values.ElementAtOrDefault(1),
+                                    Duration_03_Count = durationBuckets.Values.ElementAtOrDefault(2),
+                                    Duration_04_Count = durationBuckets.Values.ElementAtOrDefault(3),
+                                    Duration_05_Count = durationBuckets.Values.ElementAtOrDefault(4),
+                                    Duration_06_Count = durationBuckets.Values.ElementAtOrDefault(5),
+                                    Intensity_01_Count = intensityBuckets.Values.ElementAtOrDefault(0),
+                                    Intensity_02_Count = intensityBuckets.Values.ElementAtOrDefault(1),
+                                    Intensity_03_Count = intensityBuckets.Values.ElementAtOrDefault(2),
+                                    Intensity_04_Count = intensityBuckets.Values.ElementAtOrDefault(3),
+                                    Intensity_05_Count = intensityBuckets.Values.ElementAtOrDefault(4),
                                     Behavior_Notes = row[b + 17]?.ToString(),
                                     Behavior_No_Data_Recorded = noData,
                                     Behavior_LOA = loa,
+                                    Behavior_None = behaviorNone,
                                     Name = studentName,
                                     Person_ID = personId
                                 };
@@ -393,12 +437,9 @@ namespace PsychDashboard.Services
                 }
             }
             
-            // Clean up target names using the python script's logic
-            foreach(var r in results.Behaviors)
-            {
-                if (r.Target == "*") continue; // Keep star
-                r.Target = CleanTargetName(r.Target);
-            }
+            // Workbook target names are intentionally passed through as entered.
+            // The warehouse supplies its separately normalized Target_Clean field,
+            // but local workbooks must retain each distinct behavior label.
             
             } // Close using(var reader = ...)
 
@@ -415,6 +456,80 @@ namespace PsychDashboard.Services
             };
         }
 
+        private static bool IsWorkbookBehaviorName(string? target)
+        {
+            if (string.IsNullOrWhiteSpace(target) ||
+                target == "0" ||
+                target.Equals("Insert", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return !target.StartsWith("Select Target", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsTruthy(object? value)
+        {
+            if (value is bool boolean) return boolean;
+
+            var text = value?.ToString()?.Trim();
+            return text != null &&
+                   (text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                    text.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+                    text.Equals("x", StringComparison.OrdinalIgnoreCase) ||
+                    text.Equals("checked", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("no behavior", StringComparison.OrdinalIgnoreCase) ||
+                    text == "1");
+        }
+
+        private (List<string> Labels, List<double?> Values) ReadMetricBuckets(
+            DataRow headerRow,
+            DataRow dataRow,
+            int startColumn,
+            int count,
+            IReadOnlyList<string> fallbackLabels,
+            bool hasDedicatedHeaderRow)
+        {
+            var labels = new List<string>();
+            var values = new List<double?>();
+            for (var offset = 0; offset < count; offset++)
+            {
+                var column = startColumn + offset;
+                var header = column < headerRow.Table.Columns.Count
+                    ? headerRow[column]?.ToString()?.Trim()
+                    : null;
+                // On current templates, blank cells in the dedicated bucket
+                // header row mean that level does not exist for this person.
+                // Older templates without that row retain positional fallbacks.
+                if (hasDedicatedHeaderRow && string.IsNullOrWhiteSpace(header))
+                    continue;
+
+                var label = string.IsNullOrWhiteSpace(header) ? fallbackLabels[offset] : header;
+                if (IsNotSpecifiedLabel(label)) continue;
+
+                labels.Add(label);
+                values.Add(column < dataRow.Table.Columns.Count
+                    ? TryParseDouble(dataRow[column]?.ToString())
+                    : null);
+            }
+            return (labels, values);
+        }
+
+        private static bool IsNotSpecifiedLabel(string? label)
+        {
+            if (string.IsNullOrWhiteSpace(label)) return false;
+            var normalized = new string(label.Where(char.IsLetterOrDigit).ToArray());
+            return normalized.Equals("NotSpecified", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Unspecified", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void AddDistinctLabels(List<string> destination, IEnumerable<string> labels)
+        {
+            foreach (var label in labels)
+            {
+                if (!destination.Contains(label, StringComparer.OrdinalIgnoreCase))
+                    destination.Add(label);
+            }
+        }
+
         private TimeSpan? GetTimeFromShift(string? shift)
         {
             if (shift == "7-3") return new TimeSpan(7, 0, 0);
@@ -429,29 +544,5 @@ namespace PsychDashboard.Services
             return null;
         }
 
-        private string CleanTargetName(string? target)
-        {
-            if (string.IsNullOrEmpty(target)) return "Unknown";
-            
-            var t = target.Trim();
-            
-            // Replicate the python normalization loosely
-            if (t.StartsWith("Agg", StringComparison.OrdinalIgnoreCase) || t.Contains("Biting") || t.Contains("Spitting")) return "Aggression";
-            if (t.StartsWith("Agi", StringComparison.OrdinalIgnoreCase)) return "Agitation";
-            if (t.StartsWith("Anx", StringComparison.OrdinalIgnoreCase)) return "Anxiety";
-            if (t.StartsWith("Com", StringComparison.OrdinalIgnoreCase) || t.Contains("Ritual")) return "Compulsive/Ritualistic Behavior";
-            if (t.StartsWith("Dis", StringComparison.OrdinalIgnoreCase) || t.Contains("Crying") || t.Contains("Screaming") || t.Contains("Tantrum")) return "Disruptive Behavior";
-            if (t.StartsWith("Elo", StringComparison.OrdinalIgnoreCase)) return "Elopement";
-            if (t.StartsWith("Imp", StringComparison.OrdinalIgnoreCase)) return "Impulsive Behavior";
-            if (t.StartsWith("Mou", StringComparison.OrdinalIgnoreCase) || t.Contains("Pica", StringComparison.OrdinalIgnoreCase)) return "Mouthing/Pica";
-            if (t.StartsWith("Non", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Refu", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Resi", StringComparison.OrdinalIgnoreCase)) return "Refusal Behavior";
-            if (t.StartsWith("Off", StringComparison.OrdinalIgnoreCase)) return "Off Task Behavior";
-            if (t.StartsWith("Per", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Ster", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Rep", StringComparison.OrdinalIgnoreCase)) return "Stereotypy/Repetitive Behavior";
-            if (t.StartsWith("prop", StringComparison.OrdinalIgnoreCase) || t.Contains("Destruction")) return "Property Destruction";
-            if (t.StartsWith("Self I", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Self-i", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Self M", StringComparison.OrdinalIgnoreCase) || t.Contains("banging") || t.Contains("Picking")) return "SIB";
-            if (t.StartsWith("Self-s", StringComparison.OrdinalIgnoreCase) || t.Contains("Sensory")) return "Sensory/Stimulation Behaviors";
-            
-            return t;
-        }
     }
 }

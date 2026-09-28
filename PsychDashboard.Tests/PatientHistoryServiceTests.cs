@@ -12,19 +12,31 @@ public sealed class PatientHistoryServiceTests
         new ConfigurationBuilder().Build());
 
     [Fact]
-    public async Task WeekGroupingUsesIsoWeekAcrossCalendarYear()
+    public async Task WeekGroupingUsesSevenDaySegmentsFromFirstAvailableDate()
     {
         var records = new List<PatientHistoryService.BehaviorCsvRow>
         {
-            Row(new DateTime(2024, 12, 30), 1),
-            Row(new DateTime(2025, 1, 2), 2)
+            Row(new DateTime(2024, 12, 31), 1),
+            Row(new DateTime(2025, 1, 6), 2),
+            Row(new DateTime(2025, 1, 7), 3),
+            Row(new DateTime(2025, 1, 9), 4)
         };
 
         var result = await Aggregate(records, AggregationPeriod.Week);
 
-        var point = Assert.Single(result);
-        Assert.Equal(new DateTime(2024, 12, 30), point.Date);
-        Assert.Equal(3, point.Count);
+        Assert.Collection(result,
+            first =>
+            {
+                Assert.Equal(new DateTime(2024, 12, 31), first.Date);
+                Assert.Equal(new DateTime(2025, 1, 6), first.PeriodEnd);
+                Assert.Equal(3, first.Count);
+            },
+            last =>
+            {
+                Assert.Equal(new DateTime(2025, 1, 7), last.Date);
+                Assert.Equal(new DateTime(2025, 1, 9), last.PeriodEnd);
+                Assert.Equal(7, last.Count);
+            });
     }
 
     [Fact]
@@ -65,6 +77,63 @@ public sealed class PatientHistoryServiceTests
         Assert.Equal(new double[] { 1, 2, 3, 4, 5, 6 }, point.DurationBuckets);
         Assert.Equal(21, point.TotalDuration);
         Assert.Equal(55d / 15d, point.AverageIntensity, 10);
+    }
+
+    [Fact]
+    public async Task ExplicitZeroIsRetainedAsAValidDataPoint()
+    {
+        var point = Assert.Single(await Aggregate(
+            new List<PatientHistoryService.BehaviorCsvRow>
+            {
+                Row(new DateTime(2025, 3, 1), 0)
+            },
+            AggregationPeriod.Month));
+
+        Assert.Equal(0, point.Count);
+        Assert.True(point.HasData);
+    }
+
+    [Fact]
+    public async Task NoDataAndLoaRowsDoNotExtendBehaviorSeries()
+    {
+        var recorded = Row(new DateTime(2025, 3, 1), 0);
+        var noData = Row(new DateTime(2025, 4, 1), 0);
+        noData.Behavior_No_Data_Recorded = true;
+        var loa = Row(new DateTime(2025, 5, 1), 0);
+        loa.Behavior_LOA = true;
+
+        var points = await Aggregate(
+            new List<PatientHistoryService.BehaviorCsvRow> { recorded, noData, loa },
+            AggregationPeriod.Month);
+
+        var point = Assert.Single(points);
+        Assert.Equal(new DateTime(2025, 3, 1), point.Date);
+    }
+
+    [Fact]
+    public async Task MedicationDataEndsAtLastBehaviorObservation()
+    {
+        var lastBehaviorDate = new DateTime(2025, 3, 15);
+        var model = await _service.GetPatientHistoryFromRecordsAsync(
+            new List<PatientHistoryService.BehaviorCsvRow>
+            {
+                Row(lastBehaviorDate, 1)
+            },
+            new List<Medication>
+            {
+                new()
+                {
+                    Name = "Test Medication",
+                    Dose = "10",
+                    Unit = "mg",
+                    StartDate = new DateTime(2025, 3, 1),
+                    EndDate = new DateTime(2025, 12, 31)
+                }
+            },
+            AggregationPeriod.Month);
+
+        Assert.NotEmpty(model.UnreducedMedications);
+        Assert.Equal(lastBehaviorDate, model.UnreducedMedications.Max(item => item.Date));
     }
 
     private async Task<List<PsychDashboard.ViewModels.DailyBehaviorCount>> Aggregate(

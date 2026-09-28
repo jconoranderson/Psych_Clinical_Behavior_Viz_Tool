@@ -20,7 +20,9 @@ public sealed class WorkbookMergeServiceTests
             Medications =
             [
                 Medication("Example", new DateTime(2023, 7, 1))
-            ]
+            ],
+            IntensityLabels = ["Low", "High"],
+            DurationLabels = ["< 5 minutes"]
         };
         var second = new ParsedWorkbookResult
         {
@@ -32,7 +34,9 @@ public sealed class WorkbookMergeServiceTests
             Medications =
             [
                 Medication("Example", new DateTime(2023, 7, 1))
-            ]
+            ],
+            IntensityLabels = ["low", "Critical"],
+            DurationLabels = ["< 5 minutes", "5+ minutes"]
         };
 
         var merged = WorkbookMergeService.Merge(first, new[] { second });
@@ -41,6 +45,8 @@ public sealed class WorkbookMergeServiceTests
         Assert.Equal(new DateTime(2023, 7, 1), merged.Behaviors.First().Date);
         Assert.Equal(new DateTime(2025, 6, 30), merged.Behaviors.Last().Date);
         Assert.Single(merged.Medications);
+        Assert.Equal(new[] { "Low", "High", "Critical" }, merged.IntensityLabels);
+        Assert.Equal(new[] { "< 5 minutes", "5+ minutes" }, merged.DurationLabels);
     }
 
     private static PatientHistoryService.BehaviorCsvRow Behavior(DateTime date, double count) =>

@@ -120,7 +120,12 @@ namespace PsychDashboard.Services
                 }
 
                 // Separate valid data rows from no-data/star rows
-                var validRecords = residentRecords.Where(r => r.Date.HasValue && r.Target != "*").ToList();
+                var validRecords = residentRecords
+                    .Where(r => r.Date.HasValue &&
+                                r.Target != "*" &&
+                                r.Behavior_No_Data_Recorded != true &&
+                                r.Behavior_LOA != true)
+                    .ToList();
                 var noDataRows = residentRecords.Where(r => r.Date.HasValue && (r.Target == "*" || r.Behavior_No_Data_Recorded == true)).ToList();
 
                 // Date range is scoped to the selected resident's data window
@@ -201,6 +206,14 @@ namespace PsychDashboard.Services
             // --- LOAD MEDICATION DATA ---
             if (medRecords.Any() || (viewModel.Medications != null && viewModel.Medications.Any()))
             {
+                // Medication visualization is meaningful only within the resident's
+                // observed behavior window. Explicit or open-ended medication dates
+                // must never extend beyond the final valid behavior observation.
+                var maxBehaviorDate = viewModel.GlobalMaxDate?.Date
+                    ?? (viewModel.DailyBehaviorCounts.Any()
+                        ? viewModel.DailyBehaviorCounts.Max(c => c.Date).Date
+                        : DateTime.Today);
+
 // Filter by selected resident
                 if (!string.IsNullOrEmpty(selectedResident))
                 {
@@ -218,10 +231,9 @@ namespace PsychDashboard.Services
                     {
                         availableMeds.Add(row.Medication);
                         
-                        var maxBehaviorDate = viewModel.DailyBehaviorCounts.Any() ? viewModel.DailyBehaviorCounts.Max(c => c.Date) : DateTime.Today;
-                        
                         var startDate = row.Start.Value.Date;
-                        var endDate = row.End.HasValue ? row.End.Value.Date : maxBehaviorDate;
+                        var requestedEndDate = row.End?.Date ?? maxBehaviorDate;
+                        var endDate = requestedEndDate > maxBehaviorDate ? maxBehaviorDate : requestedEndDate;
                         
                         if (startDate > endDate) continue;
                         
@@ -253,7 +265,8 @@ namespace PsychDashboard.Services
                             availableMeds.Add(med.Name);
                             
                             var startDate = med.StartDate.Date;
-                            var endDate = med.EndDate.Date;
+                            var requestedEndDate = med.EndDate.Date;
+                            var endDate = requestedEndDate > maxBehaviorDate ? maxBehaviorDate : requestedEndDate;
                             
                             if (startDate > endDate) continue;
                             
@@ -387,20 +400,29 @@ namespace PsychDashboard.Services
 
         private List<DailyBehaviorCount> AggregateByWeek(List<BehaviorCsvRow> records)
         {
+            if (!records.Any()) return new List<DailyBehaviorCount>();
+
+            var firstAvailableDate = records.Min(r => r.Date!.Value.Date);
+            var lastAvailableDate = records.Max(r => r.Date!.Value.Date);
+
             return records
                 .GroupBy(r => new
                 {
-                    Year = ISOWeek.GetYear(r.Date!.Value),
-                    Week = ISOWeek.GetWeekOfYear(r.Date!.Value),
+                    Segment = (r.Date!.Value.Date - firstAvailableDate).Days / 7,
                     Target = r.Target ?? "Unknown"
                 })
                 .Select(g =>
                 {
+                    var periodStart = firstAvailableDate.AddDays(g.Key.Segment * 7);
+                    var periodEnd = periodStart.AddDays(6);
+                    if (periodEnd > lastAvailableDate) periodEnd = lastAvailableDate;
+
                     return new DailyBehaviorCount
                     {
-                        Date = ISOWeek.ToDateTime(g.Key.Year, g.Key.Week, DayOfWeek.Monday),
-                        Label = $"Week {g.Key.Week}",
-                        BehaviorType = $"Week {g.Key.Week}",
+                        Date = periodStart,
+                        PeriodEnd = periodEnd,
+                        Label = $"{periodStart:MMM d}–{periodEnd:MMM d, yyyy}",
+                        BehaviorType = "7-day segment",
                         Target = g.Key.Target,
                         Count = (int)g.Sum(x => x.Episode_Count ?? 0),
                         Rate = CalculateRate(g),

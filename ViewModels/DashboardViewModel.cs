@@ -39,6 +39,8 @@ namespace PsychDashboard.ViewModels
     public class DailyBehaviorCount
     {
         public DateTime Date { get; set; }
+        /// <summary>Inclusive end date of this aggregation period.</summary>
+        public DateTime PeriodEnd { get; set; }
         public string Label { get; set; } = string.Empty;
         public string BehaviorType { get; set; } = string.Empty;
         public string Target { get; set; } = string.Empty;
