@@ -72,3 +72,12 @@ appsettings.Development.json
 *.swp
 *.swo
 *~
+
+# Local data sources must never be committed.
+~$*
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[xX][lL][sS][mM]
+*.[xX][lL][sS][bB]
+*.[cC][sS][vV]
+*.[tT][sS][vV]
