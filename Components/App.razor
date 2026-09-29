@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 
+@inject IConfiguration Configuration
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base href="/" />
+    <base href="@BaseHref" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="PsychDashboard.styles.css" />
@@ -18,9 +20,23 @@
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-    <script src="_content/Blazor-ApexCharts/js/blazor-apexcharts.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-    <script src="js/chart-export.js"></script>
+    <script src="lib/pdf-export/html2canvas.min.js"></script>
+    <script src="lib/pdf-export/jspdf.umd.min.js"></script>
+    <script src="js/chart-export.js?v=7"></script>
+    <script src="js/chart-navigator.js?v=16"></script>
 </body>
 
 </html>
+
+@code {
+    private string BaseHref
+    {
+        get
+        {
+            var pathBase = Configuration["PathBase"]?.Trim();
+            return string.IsNullOrWhiteSpace(pathBase)
+                ? "/"
+                : $"/{pathBase.Trim('/')}/";
+        }
+    }
+}

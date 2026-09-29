@@ -1,7 +1,7 @@
 @using MudBlazor
 @using PsychDashboard.ViewModels
 
-<MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid #e0e0e0; border-radius: 8px;">
+<MudPaper Class="pa-3 sidebar-card" Elevation="0">
     <MudStack Spacing="2">
         <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #424242;">
             <MudIcon Icon="@Icons.Material.Filled.Tune" Size="MudBlazor.Size.Small" Class="mr-1" />
@@ -24,10 +24,12 @@
                              @ondblclick="@(() => IsolateTarget(target))">
                         @target
                     </MudText>
-                    <input type="color"
-                           value="@targetState.Color"
-                           @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))"
-                           style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                    <label class="color-swatch" style="@($"--swatch-color: {targetState.Color}")" title="Change @target color">
+                        <input type="color"
+                               value="@targetState.Color"
+                               aria-label="Change @target color"
+                               @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))" />
+                    </label>
                     @if (HasSubcategories(target))
                     {
                         <MudIconButton Icon="@(targetState.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
@@ -60,12 +62,16 @@
 
         <MudText Typo="Typo.caption" Style="font-weight: 600; color: #616161;">Overlays</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudCheckBox T="bool" Value="ShowIntensity" ValueChanged="OnShowIntensityChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Warning" />
-            <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;" @onclick="@(() => OnShowIntensityChanged(!ShowIntensity))">Intensity</MudText>
+            <MudCheckBox T="bool" Value="ShowIntensity" ValueChanged="OnShowIntensityChanged" Disabled="OverlayMetricsDisabled" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Warning" />
+            <MudText Typo="Typo.caption"
+                     Style="@($"cursor: {(OverlayMetricsDisabled ? "not-allowed" : "pointer")}; user-select: none; opacity: {(OverlayMetricsDisabled ? "0.45" : "1")};")"
+                     @onclick="@(() => ToggleIntensity())">Intensity</MudText>
         </MudStack>
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudCheckBox T="bool" Value="ShowDuration" ValueChanged="OnShowDurationChanged" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Info" />
-            <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;" @onclick="@(() => OnShowDurationChanged(!ShowDuration))">Duration</MudText>
+            <MudCheckBox T="bool" Value="ShowDuration" ValueChanged="OnShowDurationChanged" Disabled="OverlayMetricsDisabled" Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Info" />
+            <MudText Typo="Typo.caption"
+                     Style="@($"cursor: {(OverlayMetricsDisabled ? "not-allowed" : "pointer")}; user-select: none; opacity: {(OverlayMetricsDisabled ? "0.45" : "1")};")"
+                     @onclick="@(() => ToggleDuration())">Duration</MudText>
         </MudStack>
 
         @if (AvailableMedications.Any())
@@ -76,7 +82,6 @@
                     <MudIcon Icon="@Icons.Material.Filled.Medication" Size="MudBlazor.Size.Small" Class="mr-1" />
                     Medications
                 </MudText>
-                <MudSwitch T="bool" Value="ShowMedications" ValueChanged="OnShowMedicationsChanged" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" />
             </MudStack>
             
             @if (ShowMedications)
@@ -98,10 +103,12 @@
                                      @ondblclick="@(() => IsolateMedication(med))">
                                 @med
                             </MudText>
-                            <input type="color"
-                                   value="@medColor"
-                                   @onchange="@((ChangeEventArgs e) => OnMedicationColorChanged(med, e.Value?.ToString() ?? "#3e2723"))"
-                                   style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px; opacity: 0.8;" />
+                            <label class="color-swatch" style="@($"--swatch-color: {medColor}")" title="Change @med color">
+                                <input type="color"
+                                       value="@medColor"
+                                       aria-label="Change @med color"
+                                       @onchange="@((ChangeEventArgs e) => OnMedicationColorChanged(med, e.Value?.ToString() ?? "#3e2723"))" />
+                            </label>
                         </MudStack>
                     }
                 </MudStack>
@@ -120,8 +127,17 @@
     [Parameter] public EventCallback<bool> ShowIntensityChanged { get; set; }
     [Parameter] public bool ShowDuration { get; set; }
     [Parameter] public EventCallback<bool> ShowDurationChanged { get; set; }
+    [Parameter] public bool OverlayMetricsDisabled { get; set; }
     [Parameter] public bool ShowMedications { get; set; }
     [Parameter] public EventCallback<bool> ShowMedicationsChanged { get; set; }
+
+    private Task ToggleIntensity() => OverlayMetricsDisabled
+        ? Task.CompletedTask
+        : OnShowIntensityChanged(!ShowIntensity);
+
+    private Task ToggleDuration() => OverlayMetricsDisabled
+        ? Task.CompletedTask
+        : OnShowDurationChanged(!ShowDuration);
 
     // Default color palette for targets (fallback)
     private static readonly string[] DefaultColors = new[]
@@ -186,6 +202,14 @@
     {
         return AvailableTargets.ToDictionary(t => t, t => GetTargetColor(t));
     }
+
+    public Dictionary<string, HashSet<string>> GetHiddenSubcategories() =>
+        _targetStates
+            .Where(entry => entry.Value.HiddenSubcategories.Count > 0)
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value.HiddenSubcategories.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
 
     // Medication State
     private HashSet<string> _hiddenMedications = new(StringComparer.OrdinalIgnoreCase);

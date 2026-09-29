@@ -67,6 +67,7 @@ appsettings.Development.json
 .DS_Store
 
 # Temporary files
+~$*
 *.patch
 *.sh
 *.swp
@@ -74,10 +75,13 @@ appsettings.Development.json
 *~
 
 # Local data sources must never be committed.
-~$*
 *.[xX][lL][sS]
 *.[xX][lL][sS][xX]
 *.[xX][lL][sS][mM]
 *.[xX][lL][sS][bB]
 *.[cC][sS][vV]
 *.[tT][sS][vV]
+
+# Generated deployment packages
+/artifacts/
+/published_*/

@@ -2,21 +2,20 @@
 
 ## Overview
 
-The Psych Clinical Behavior Viz Tool is a Blazor-based analytical dashboard created for psychology professionals and clinical staff. It is designed to ingest and translate complex, multidimensional behavioral and clinical datasets into actionable, intuitive visualizations.
+The Psychology Visualization Tool helps clinical staff explore behavior history alongside medication changes. Load Excel behavior workbooks or use configured warehouse CSV exports, then select behaviors, shifts, and a date range to explore the data.
 
-In modern clinical environments, patient data is vast and multifaceted. This tool bridges the gap between raw data storage and clinical insight by interfacing directly with an underlying SQL data warehouse. It synthesizes longitudinal patient data to empower clinicians to:
-- Monitor granular changes in patient behavior over extended periods of time.
-- Correlate behavioral shifts with medical interventions, including complex medication regimens and dosage adjustments.
-- Identify patterns and anomalies across various clinical factors to support evidence-based, personalized treatment plans.
-- Navigate rigorous user requirements for data accuracy, temporal precision, and clear clinical presentation.
+![Dashboard showing monthly behavior rates, medication dose changes, a hover tooltip, behavior subcategories, and the history navigator](docs/images/dashboard-overview.png)
 
-By transforming dense relational data into interactive visual insights, the tool significantly reduces the cognitive load on clinical staff and facilitates more informed, data-driven psychological assessments.
+The example above shows monthly behavior rates as colored bars with medication doses overlaid as dotted lines. Hovering over the chart displays behavior values and medication details; the left panel breaks down behavior subcategories. Drag the highlighted window below the chart to explore a different period.
 
 ## Features
 
-- **Interactive Visualizations:** Utilizes [Blazor-ApexCharts](https://github.com/apexcharts/Blazor-ApexCharts) for rendering dynamic, interactive charts.
-- **Modern UI:** Built with [MudBlazor](https://mudblazor.com/) for a clean, responsive, and accessible user interface.
-- **Data Integration:** Displays complex clinical and behavioral metrics in an easy-to-understand dashboard format.
+- **Workbook uploads:** Drag and drop or choose `.xlsx`, `.xlsm`, or `.xls` files. Combine workbooks to explore multiple years of history.
+- **Behavior comparisons:** Choose which behaviors to display, switch between line and bar charts, and compare frequency or rate per recorded shift.
+- **Time and shift filters:** Group observations by day, week, month, or rolling view; select shifts and adjust the date range.
+- **Optional overlays:** Show medication dose changes, intensity, duration, missing data, and trend lines.
+- **Interactive exploration:** Inspect hover details, zoom into the chart, and navigate the full history using the range selector.
+- **PDF export:** Export the current chart view for sharing or review.
 
 ## Getting Started
 
@@ -38,7 +37,11 @@ By transforming dense relational data into interactive visual insights, the tool
    ```bash
    dotnet watch run
    ```
-4. Open your browser to the URL indicated in your terminal (usually `http://localhost:5000` or `https://localhost:5001`).
+4. Open your browser to the URL indicated in your terminal. The HTTP launch profile uses `http://localhost:5008`.
+
+## Workbook loading
+
+If a workbook cannot be read or contains no readable behavior data, the upload message identifies the file. No files from the failed batch are added, and previously loaded data remains available. Differences or repeated labels in workbook headers do not block loading.
 
 ## Technologies Used
 
