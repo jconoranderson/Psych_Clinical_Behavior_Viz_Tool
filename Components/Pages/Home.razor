@@ -691,7 +691,7 @@
                                                  Name="@seriesName"
                                                  SeriesType="SeriesType.Line"
                                                  Color="@medColor"
-                                                 XValue="@(e => GetChartXValue(e))"
+                                                 XValue="@(e => GetMedicationXValue(e))"
                                                  YValue="@(e => !e.HasData ? null : (decimal)Math.Log10(e.Rate))" />
                             }
                         }
@@ -1017,6 +1017,20 @@
         AggregationPeriod.Month => (item.Date.Year * 12 + item.Date.Month - 1) - NavigatorFirstMonthIndex,
         _ => item.Date
     };
+    private object GetMedicationXValue(DailyBehaviorCount item) =>
+        _selectedPeriod == AggregationPeriod.Month
+            ? GetMedicationMonthPosition(item.Date)
+            : GetChartXValue(item);
+
+    private double GetMedicationMonthPosition(DateTime date) =>
+        (date.Year * 12 + date.Month - 1) - NavigatorFirstMonthIndex - 0.5 +
+        (date.Day - 1 + date.TimeOfDay.TotalDays) / DateTime.DaysInMonth(date.Year, date.Month);
+
+    private double GetMedicationAnnotationXValue(DateTime date) =>
+        _selectedPeriod == AggregationPeriod.Month
+            ? GetMedicationMonthPosition(date)
+            : new DateTimeOffset(DateTime.SpecifyKind(date, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
     private long GetAnnotationXValue(DateTime date) => _selectedPeriod == AggregationPeriod.Month
         ? (date.Year * 12 + date.Month - 1) - NavigatorFirstMonthIndex
         : new DateTimeOffset(date).ToUnixTimeMilliseconds();
@@ -1991,19 +2005,30 @@
         var lookup = new Dictionary<string, string>();
         if (!_renderedChartState.ShowMedications || _viewModel == null) return lookup;
 
-        var medicationsByDate = _viewModel.UnreducedMedications
+        var visibleMedications = _viewModel.UnreducedMedications
             .Where(m => m.Dose > 0 && allowedMeds.Contains(m.Name))
-            .GroupBy(m => m.Date.Date)
-            .ToDictionary(group => group.Key, group => group
-                .OrderByDescending(m => m.Dose)
-                .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList());
+            .ToList();
 
-        // Match the plotted X coordinate: month index, rolling target, or UTC
-        // timestamp. Cover the mounted history so navigator movement also works.
+        // A grouped behavior point represents a period, not just its first day.
+        // Show changes within that period instead of presenting a stale dose.
         foreach (var point in ChartBehaviorCounts)
         {
-            if (!medicationsByDate.TryGetValue(point.Date.Date, out var medications)) continue;
+            var periodStart = point.Date.Date;
+            var periodEnd = _selectedPeriod switch
+            {
+                AggregationPeriod.Month => new DateTime(periodStart.Year, periodStart.Month, 1).AddMonths(1).AddDays(-1),
+                AggregationPeriod.Week => point.PeriodEnd >= periodStart ? point.PeriodEnd.Date : periodStart.AddDays(6),
+                AggregationPeriod.Average => (_endDate ?? _dateRange?.End ?? periodStart).Date,
+                _ => periodStart
+            };
+            var medications = visibleMedications
+                .Where(m => m.Date.Date >= periodStart && m.Date.Date <= periodEnd)
+                .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.OrderBy(m => m.Date).ToList())
+                .OrderByDescending(group => group[0].Dose)
+                .ThenBy(group => group[0].Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (medications.Count == 0) continue;
             var key = _selectedPeriod switch
             {
                 AggregationPeriod.Month => Convert.ToString(GetChartXValue(point), System.Globalization.CultureInfo.InvariantCulture)!,
@@ -2011,11 +2036,15 @@
                 _ => new DateTimeOffset(DateTime.SpecifyKind(point.Date, DateTimeKind.Utc))
                     .ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
             };
-            var rows = medications.Select(m =>
+            var rows = medications.Select(history =>
             {
+                var m = history[0];
                 var name = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Name);
                 var unit = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(m.Unit ?? "");
-                return $"<div style='font-size:11px;font-weight:normal;color:#555;'>{name}: <b>{m.Dose} {unit}</b></div>";
+                var changes = history.Where((dose, index) => index > 0 && dose.Dose != history[index - 1].Dose)
+                    .Select(dose => $" → <b>{dose.Dose} {System.Text.Encodings.Web.HtmlEncoder.Default.Encode(dose.Unit ?? "")}</b> on {dose.Date:MMM d}");
+                var startLabel = m.Date.Date > periodStart ? $" from {m.Date:MMM d}" : "";
+                return $"<div style='font-size:11px;font-weight:normal;color:#555;'>{name}: <b>{m.Dose} {unit}</b>{startLabel}{string.Join("", changes)}</div>";
             });
             lookup[key] = "<div style='margin-top:6px;padding-top:6px;border-top:1px solid #ccc;'><b>Medications</b>" +
                 string.Join("", rows) + "</div>";
@@ -2035,49 +2064,61 @@
 
         if (!medicationData.Any()) return new List<DailyBehaviorCount>();
 
-        var chartMinDate = FilteredBehaviorCounts.Any()
-            ? FilteredBehaviorCounts.Min(item => item.Date)
-            : (_dateRange?.Start ?? DateTime.Today.AddDays(-30));
-        var chartMaxDate = FilteredBehaviorCounts.Any()
-            ? FilteredBehaviorCounts.Max(item => item.Date)
-            : (_dateRange?.End ?? DateTime.Today);
-
-        List<DateTime> datesToUse;
-        if (_renderedChartState.ChartType == ChartDisplayType.Bar)
+        // Medication changes have their own dates, independent of behavior
+        // aggregation. Sampling only month/week starts delays mid-period changes.
+        var chartMinDate = _viewModel.GlobalMinDate?.Date ?? medicationData.First().Date.Date;
+        var chartMaxDate = _viewModel.GlobalMaxDate?.Date ?? medicationData.Last().Date.Date;
+        var doses = medicationData.ToDictionary(item => item.Date.Date, item => item.Dose);
+        var dates = doses.Keys.Where(date => date >= chartMinDate && date <= chartMaxDate).ToHashSet();
+        dates.Add(chartMinDate);
+        dates.Add(chartMaxDate);
+        foreach (var date in doses.Keys)
         {
-            datesToUse = FilteredBehaviorCounts
-                .Select(item => item.Date)
-                .Distinct()
-                .OrderBy(date => date)
-                .ToList();
-        }
-        else
-        {
-            datesToUse = medicationData
-                .Select(item => item.Date)
-                .Where(date => date >= chartMinDate && date <= chartMaxDate)
-                .Distinct()
-                .ToList();
-
-            if (!datesToUse.Contains(chartMinDate)) datesToUse.Add(chartMinDate);
-            if (!datesToUse.Contains(chartMaxDate)) datesToUse.Add(chartMaxDate);
-            datesToUse.Sort();
+            // Include the first inactive day so gaps/stops do not carry the
+            // previous dose forward until the next prescription.
+            var next = date.AddDays(1);
+            if (next >= chartMinDate && next <= chartMaxDate && !doses.ContainsKey(next)) dates.Add(next);
         }
 
-        return datesToUse.Select(date =>
+        var orderedDates = dates.OrderBy(date => date).ToList();
+        var result = new List<DailyBehaviorCount>();
+        double? previousDose = null;
+        foreach (var date in orderedDates)
         {
-            // UnreducedMedications contains one record for every active day.
-            // An absent date therefore represents a zero dose, including gaps
-            // and dates after a medication ended.
-            var dose = medicationData.LastOrDefault(item => item.Date.Date == date.Date)?.Dose ?? 0;
-            return new DailyBehaviorCount
+            var dose = doses.GetValueOrDefault(date);
+            if (dose != previousDose || date == chartMaxDate)
             {
-                Date = date,
-                Target = seriesName,
-                Rate = dose == 0 ? 0.1 : dose,
-                HasData = true
-            };
-        }).ToList();
+                result.Add(new DailyBehaviorCount
+                {
+                    Date = date, Target = seriesName,
+                    Rate = dose == 0 ? 0.1 : dose, HasData = true
+                });
+            }
+            previousDose = dose;
+        }
+        return result;
+    }
+
+    private string GetBehaviorColumnWidth()
+    {
+        if (_selectedPeriod == AggregationPeriod.Average) return "40%";
+        var behaviorX = ChartBehaviorCounts.Select(point => _selectedPeriod == AggregationPeriod.Month
+            ? Convert.ToDouble(GetChartXValue(point))
+            : new DateTimeOffset(DateTime.SpecifyKind(point.Date, DateTimeKind.Utc)).ToUnixTimeMilliseconds())
+            .Distinct().OrderBy(x => x).ToList();
+        if (behaviorX.Count < 2) return "80%";
+        var behaviorSpacing = behaviorX.Zip(behaviorX.Skip(1), (a, b) => b - a).Min();
+        var minimumSpacing = behaviorSpacing;
+        foreach (var series in validMedsList)
+        {
+            var xs = BuildMedicationPlotData(series).Select(point => GetMedicationAnnotationXValue(point.Date)).ToList();
+            foreach (var spacing in xs.Zip(xs.Skip(1), (a, b) => b - a).Where(spacing => spacing > 0))
+                minimumSpacing = Math.Min(minimumSpacing, spacing);
+        }
+        // Apex derives column widths from the shortest X gap across ALL series.
+        // Compensate for exact medication dates so a one-day dose change cannot
+        // shrink monthly behavior columns into thin lines.
+        return (80 * behaviorSpacing / minimumSpacing).ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) + "%";
     }
 
     private List<DailyBehaviorCount> BuildTrendLineData(string target)
@@ -2307,6 +2348,10 @@
 
         var medLookupJson = System.Text.Json.JsonSerializer.Serialize(
             BuildMedicationTooltipLookup(allowedMeds));
+        var medicationDateLabelsJson = System.Text.Json.JsonSerializer.Serialize(validMedsList
+            .SelectMany(BuildMedicationPlotData)
+            .GroupBy(point => GetMedicationAnnotationXValue(point.Date).ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .ToDictionary(group => group.Key, group => group.First().Date.ToString("MMM d, yyyy")));
 
         var rollingStart = _startDate ?? _dateRange?.Start
             ?? _viewModel?.UnreducedBehaviorCounts.Where(x => x.Date.HasValue).MinBy(x => x.Date)?.Date;
@@ -2492,6 +2537,8 @@
             var medicationNames = " + medNamesJson + @";
             var medicationBaseName = hoveredName.split(' (')[0];
             if (medicationNames.includes(medicationBaseName) || medicationNames.includes(hoveredName)) {
+                var medicationDates = " + medicationDateLabelsJson + @";
+                dateLabel = medicationDates[String(hoveredX)] || dateLabel;
                 var plottedDose = series[seriesIndex]
                     ? Number(series[seriesIndex][dataPointIndex])
                     : NaN;
@@ -2601,6 +2648,12 @@
             // including numeric month coordinates and rolling categories.
             tooltipXFormatter = @"function(val, opts) {
                 var header = (" + tooltipXFormatter + @")(val, opts);
+                var names = " + medNamesJson + @";
+                var seriesName = opts?.w?.globals?.seriesNames?.[opts.seriesIndex] || '';
+                if (names.some(function(name) { return seriesName === name || seriesName.startsWith(name + ' ('); })) {
+                    var dates = " + medicationDateLabelsJson + @";
+                    return '<b>' + (dates[String(val)] || '') + '</b>';
+                }
                 var medLookup = " + medLookupJson + @";
                 var meds = medLookup[String(val)];
                 return header + (meds || '');
@@ -2753,7 +2806,7 @@
             {
                 Bar = new PlotOptionsBar
                 {
-                    ColumnWidth = _selectedPeriod == AggregationPeriod.Average ? "40%" : "80%",
+                    ColumnWidth = GetBehaviorColumnWidth(),
                     BorderRadius = 2,
                     HideZeroBarsWhenGrouped = true
                 }
@@ -3071,26 +3124,14 @@
                 var seriesName = validMedsList[medIndex];
                 var med = GetMedicationName(seriesName);
                 var medColor = _variableSelector != null ? _variableSelector.GetMedicationColor(med) : "#3e2723";
-                var unreducedMedData = _viewModel.UnreducedMedications
-                    .Where(x => x.Name.Equals(med, StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(x => x.Date)
-                    .ToList();
-                var datesToUse = FilteredBehaviorCounts.Select(x => x.Date).Distinct().ToList();
-                if (_renderedChartState.ChartType != ChartDisplayType.Bar)
+                var plottedMedication = BuildMedicationPlotData(seriesName);
+                for (int j = 1; j < plottedMedication.Count; j++)
                 {
-                    datesToUse.AddRange(unreducedMedData.Select(x => x.Date));
-                }
-                datesToUse = datesToUse.Distinct().OrderBy(d => d).ToList();
+                    var previousDose = plottedMedication[j - 1].Rate;
+                    var currentDose = plottedMedication[j].Rate;
+                    var currentDate = plottedMedication[j].Date;
 
-                for (int j = 1; j < datesToUse.Count; j++)
-                {
-                    var previousDate = datesToUse[j - 1];
-                    var currentDate = datesToUse[j];
-
-                    var previousDose = unreducedMedData.LastOrDefault(x => x.Date <= previousDate)?.Dose ?? 0;
-                    var currentDose = unreducedMedData.LastOrDefault(x => x.Date <= currentDate)?.Dose ?? 0;
-
-                    if (previousDose > 0 && currentDose > 0 && currentDose != previousDose)
+                    if (previousDose > 0.1 && currentDose > 0.1 && currentDose != previousDose)
                     {
                         var isIncrease = currentDose > previousDose;
                         var symbol = isIncrease ? "▲" : "▼";
@@ -3105,7 +3146,7 @@
 
                         annotations.Points.Add(new AnnotationsPoint
                         {
-                            X = GetAnnotationXValue(markerDate),
+                            X = GetMedicationAnnotationXValue(markerDate),
                             Y = logY,
                             YAxisIndex = medicationYAxisIndex,
                             Marker = new AnnotationMarker { Size = 0 },

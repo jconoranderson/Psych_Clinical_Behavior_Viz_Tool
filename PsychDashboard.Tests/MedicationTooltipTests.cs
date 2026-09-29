@@ -10,6 +10,61 @@ namespace PsychDashboard.Tests;
 public sealed class MedicationTooltipTests
 {
     [Theory]
+    [InlineData(AggregationPeriod.Month, ChartDisplayType.Bar)]
+    [InlineData(AggregationPeriod.Week, ChartDisplayType.Bar)]
+    [InlineData(AggregationPeriod.Day, ChartDisplayType.Bar)]
+    [InlineData(AggregationPeriod.Month, ChartDisplayType.Line)]
+    public void MidPeriodChangesAndGapsUseActualDates(AggregationPeriod period, ChartDisplayType chartType)
+    {
+        using var page = CreatePage(period, false, true);
+        var model = (DashboardViewModel)Field("_viewModel").GetValue(page)!;
+        var start = new DateTime(2025, 1, 1);
+        model.AvailableMedications = new() { "Example" };
+        model.UnreducedMedications = Enumerable.Range(0, 31)
+            .Where(day => day < 20 || day >= 26)
+            .Select(day => new DailyMedication
+            {
+                Name = "Example", Unit = "mg", Date = start.AddDays(day), Dose = day < 14 ? 10 : 25
+            }).ToList();
+        model.DailyMedications = model.UnreducedMedications;
+        var stateType = typeof(Home).GetNestedType("ChartViewState", BindingFlags.NonPublic)!;
+        Field("_renderedChartState").SetValue(page, Activator.CreateInstance(stateType,
+            chartType, false, false, true, false));
+
+        var points = (List<DailyBehaviorCount>)Invoke(page, "BuildMedicationPlotData", "Example (mg)")!;
+        Assert.Contains(points, p => p.Date == start.AddDays(14) && p.Rate == 25);
+        Assert.Contains(points, p => p.Date == start.AddDays(20) && p.Rate == 0.1);
+        Assert.Contains(points, p => p.Date == start.AddDays(26) && p.Rate == 25);
+        Assert.Equal(start.AddDays(30), points.Last().Date);
+
+        Invoke(page, "BuildChartOptions");
+        var options = (ApexChartOptions<DailyBehaviorCount>)Field("_options").GetValue(page)!;
+        var change = Assert.Single(options.Annotations.Points);
+        var expectedX = period == AggregationPeriod.Month
+            ? -0.5 + 14d / 31
+            : new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        Assert.Equal(expectedX, Convert.ToDouble(change.X), 8);
+        if (period == AggregationPeriod.Month)
+            Assert.Equal(expectedX, Convert.ToDouble(Invoke(page, "GetMedicationXValue", points[1])), 8);
+    }
+
+    [Fact]
+    public void MonthlyHoverReportsDoseChangesWithinTheMonth()
+    {
+        using var page = CreatePage(AggregationPeriod.Month, false, true);
+        var model = (DashboardViewModel)Field("_viewModel").GetValue(page)!;
+        model.UnreducedMedications.Add(new DailyMedication
+        {
+            Name = "Low", Dose = 15, Unit = "mg", Date = new DateTime(2025, 1, 15)
+        });
+        var lookup = (Dictionary<string, string>)Invoke(page, "BuildMedicationTooltipLookup",
+            new HashSet<string> { "Low" })!;
+        Assert.Contains("5 mg", lookup["0"]);
+        Assert.Contains("15 mg", lookup["0"]);
+        Assert.Contains("Jan 15", lookup["0"]);
+    }
+
+    [Theory]
     [InlineData(AggregationPeriod.Month)]
     [InlineData(AggregationPeriod.Week)]
     [InlineData(AggregationPeriod.Day)]
