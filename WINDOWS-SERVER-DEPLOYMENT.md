@@ -22,7 +22,7 @@ It is intended to run behind IIS on a 64-bit Windows Server.
 1. Extract the ZIP to a versioned directory such as:
 
    ```text
-   C:\Apps\PsychDashboard\releases\2026-07-29
+   C:\Apps\PsychDashboard\releases\2026-09-30
    ```
 
 2. Create an IIS application pool:
@@ -45,15 +45,20 @@ The generated `web.config` starts the application with:
 dotnet .\PsychDashboard.dll
 ```
 
-## Required production configuration
+## Included intranet configuration
 
-Set these as machine-level environment variables, application-pool environment
-variables, or protected IIS configuration. Double underscores represent nested
-.NET configuration keys.
+The package already includes the settings below for the existing intranet
+application. No code or configuration edits are needed when deploying to
+`https://discovernet.tcfd.org/Tools/psychology_visualization_tool/` on the
+existing IIS application. Production is the default environment when no
+environment override is set. Existing IIS or machine environment variables
+can override the packaged settings; retain Production for this deployment.
+
+Equivalent settings (shown for reference, not required setup steps):
 
 ```text
 ASPNETCORE_ENVIRONMENT=Production
-AllowedHosts=psych-dashboard.example.org
+AllowedHosts=localhost;127.0.0.1;discovernet.tcfd.org
 PathBase=/Tools/psychology_visualization_tool
 Security__RequireAuthentication=false
 ```
@@ -100,7 +105,8 @@ The application-pool identity needs read-only access to these files.
 
 After deployment:
 
-1. Browse to `https://<hostname>/health`; it should return HTTP 200.
+1. Browse to `https://discovernet.tcfd.org/Tools/psychology_visualization_tool/health`;
+   it should return HTTP 200.
 2. Browse to the application and verify it loads. If authentication has been
    enabled, verify redirection to the identity provider.
 3. Upload a representative workbook and verify charts, tooltips, date filters,
