@@ -94,18 +94,23 @@ window.chartExport = {
         const ratio = canvas.width / canvas.height;
         const imageWidth = Math.min(width, availableHeight * ratio);
         const imageHeight = imageWidth / ratio;
+        const firstPageLines = Math.min(lines.length,
+            Math.max(0, Math.floor((pageHeight - margin * 2 - imageHeight - 7) / lineHeight)));
+        const blockHeight = imageHeight + (firstPageLines ? 7 + firstPageLines * lineHeight : 0);
+        const top = Math.max(margin, (pageHeight - blockHeight) / 2);
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
-            (pageWidth - imageWidth) / 2, margin, imageWidth, imageHeight, undefined, 'FAST');
+            (pageWidth - imageWidth) / 2, top, imageWidth, imageHeight, undefined, 'FAST');
         let offset = 0;
-        let y = margin + imageHeight + 7;
+        let y = top + imageHeight + 7;
+        let count = firstPageLines;
         while (offset < lines.length) {
-            const count = Math.max(1, Math.floor((pageHeight - margin - y) / lineHeight) + 1);
             const chunk = lines.slice(offset, offset + count);
             chunk.forEach((line, index) => pdf.text(line, margin, y + index * lineHeight));
             offset += chunk.length;
             if (offset < lines.length) {
                 pdf.addPage('letter', 'landscape');
-                y = margin + lineHeight;
+                count = Math.min(lines.length - offset, Math.floor((pageHeight - margin * 2) / lineHeight));
+                y = (pageHeight - count * lineHeight) / 2 + lineHeight;
             }
         }
     },
