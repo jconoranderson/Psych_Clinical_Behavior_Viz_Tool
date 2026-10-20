@@ -178,6 +178,10 @@
         if (!resetHandlerInstalled) {
             resetHandlerInstalled = true;
             document.addEventListener("click", function (event) {
+                const details = document.querySelector(".hover-details-panel");
+                if (details && !details.contains(event.target) && dashboardReference) {
+                    dashboardReference.invokeMethodAsync("DismissHoverDetails");
+                }
                 const resetButton = event.target.closest(".apexcharts-reset-icon");
                 if (!resetButton || !dashboardReference) return;
 
