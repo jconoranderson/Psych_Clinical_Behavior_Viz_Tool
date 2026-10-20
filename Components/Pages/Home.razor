@@ -464,7 +464,7 @@
                             @foreach (var target in VisibleTargets)
                             {
                                 var tc = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
                                     <div style="width:12px; height:12px; border-radius:2px; background:@tc;"></div>
                                     <MudText Typo="Typo.caption" Style="font-weight:600;">@target</MudText>
                                 </MudStack>
@@ -479,7 +479,7 @@
                                 {
                                     var medicationName = GetMedicationName(medicationSeries);
                                     var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
                                         <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
                                         <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
                                     </MudStack>
@@ -506,7 +506,7 @@
                                     : (hasDuration
                                         ? "duration"
                                         : (targetMetric == OverlayMetric.Intensity ? "intensity unavailable" : "duration unavailable"));
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
                                     @if (hasIntensity || hasDuration)
                                     {
                                         @* Gradient swatch showing light→dark of behavior color *@
@@ -564,7 +564,7 @@
                                 {
                                     var medicationName = GetMedicationName(medicationSeries);
                                     var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
                                         <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
                                         <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
                                     </MudStack>

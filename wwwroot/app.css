@@ -409,3 +409,8 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
     font-size: 12px;
     line-height: 1.6;
 }
+
+.chart-legend-entry {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}

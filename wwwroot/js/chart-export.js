@@ -1,4 +1,4 @@
-/** Two-page landscape PDF export for the Psychology Visualization Tool. */
+/** Chart and summary landscape PDF export for the Psychology Visualization Tool. */
 window.chartExport = {
     requestTitle: function (name) {
         const suffix = window.prompt(`Optional chart title to add after "${name}". Leave blank to use the name only.`, '');
@@ -46,133 +46,68 @@ window.chartExport = {
     },
 
     captureDashboard: async function (summary, exportTitle) {
-        const tile = document.querySelector('.chart-card');
-        if (!tile) throw new Error('The main chart tile is unavailable.');
-        const root = document.querySelector('.mud-layout') || document.body;
-        const bounds = tile.getBoundingClientRect();
-        const viewportWidth = document.documentElement.clientWidth;
-        const viewportHeight = document.documentElement.clientHeight;
-        const dateValues = ['chart-range-start', 'chart-range-end'].map(id => {
-            const input = document.getElementById(id);
-            return { value: input?.value || '' };
-        });
-        const title = exportTitle || tile.querySelector('.chart-title')?.textContent?.trim() || 'Behavior overview';
-        const legendItems = [...tile.querySelectorAll('.apexcharts-legend-series')]
-            .map(series => ({
-                text: series.querySelector('.apexcharts-legend-text')?.textContent?.trim() || '',
-                color: getComputedStyle(series.querySelector('.apexcharts-legend-marker') || series).backgroundColor
-            }))
-            .filter(item => item.text)
-            .filter((item, index, items) => items.findIndex(other => other.text === item.text) === index);
-        const captureOptions = {
-            backgroundColor: '#ffffff',
-            scale: 2,
-            useCORS: true,
-            allowTaint: false,
-            logging: false,
-            width: viewportWidth,
-            height: viewportHeight,
-            windowWidth: viewportWidth,
-            windowHeight: viewportHeight,
-            scrollX: 0,
-            scrollY: -window.scrollY,
-            onclone: clonedDocument => {
-                const style = clonedDocument.createElement('style');
-                style.textContent = `
-                    .chart-card { position: relative !important; }
-                    .chart-card .apexcharts-legend { visibility: hidden !important; }
-                `;
-                clonedDocument.head.appendChild(style);
+        const chart = document.getElementById('behavior-main-chart-container');
+        if (!chart) throw new Error('The main chart is unavailable.');
+        const tile = chart.closest('.chart-card');
+        const bounds = chart.getBoundingClientRect();
+        if (bounds.width <= 0 || bounds.height <= 0) throw new Error('The chart has no visible area.');
 
-                const card = clonedDocument.querySelector('.chart-card');
-                if (!card) return;
-                // html2canvas reflows MudBlazor's interactive controls into
-                // overlapping rows. Replace only the cloned controls with a
-                // compact, non-interactive record of the same settings.
-                card.querySelector('.chart-heading-row')?.remove();
-                card.querySelector('.dashboard-toolbar')?.remove();
-                const header = clonedDocument.createElement('div');
-                header.style.cssText = 'flex:0 0 auto;min-height:108px;box-sizing:border-box;padding:3px 6px 9px;border-bottom:1px solid #e8ecef;overflow:hidden;color:#1f2933;';
-                const eyebrow = clonedDocument.createElement('div');
-                eyebrow.textContent = 'BEHAVIOR OVERVIEW';
-                eyebrow.style.cssText = 'font:700 12px Arial,sans-serif;letter-spacing:1px;color:#75808b;height:18px;white-space:nowrap;';
-                const heading = clonedDocument.createElement('div');
-                heading.textContent = title;
-                heading.style.cssText = 'font:700 25px Arial,sans-serif;min-height:34px;line-height:30px;overflow-wrap:anywhere;';
-                const settings = clonedDocument.createElement('div');
-                const dateRange = dateValues.map(({ value }) => {
-                    const parts = value.split('-');
-                    return parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : '—';
-                }).join(' – ');
-                settings.textContent = [
-                    `${summary.view || 'Chart'} view`,
-                    `${summary.measure || 'Rate'} measure`,
-                    `${summary.grouping || 'Month'} grouping`,
-                    `Shifts: ${summary.shifts || 'All'}`
-                ].join('   •   ');
-                settings.style.cssText = 'font:600 13px Arial,sans-serif;color:#52606d;height:22px;line-height:22px;white-space:nowrap;';
-                const settingsDetails = clonedDocument.createElement('div');
-                settingsDetails.textContent = [
-                    `Overlays: ${summary.overlays || 'None'}`,
-                    dateRange
-                ].join('   •   ');
-                settingsDetails.style.cssText = 'font:600 13px Arial,sans-serif;color:#52606d;height:22px;line-height:22px;white-space:nowrap;';
-                header.append(eyebrow, heading, settings, settingsDetails);
-                card.prepend(header);
+        // Build a standalone export at the document origin. Capturing the full
+        // app and cropping viewport coordinates can include headers or navigator
+        // controls when the capture renderer lays out the page differently.
+        const stage = document.createElement('div');
+        stage.className = 'pdf-chart-export';
+        stage.style.cssText = `position:absolute;left:0;top:0;width:${bounds.width + 32}px;padding:16px;box-sizing:border-box;background:#fff;color:#263238;z-index:-1;font-family:Arial,sans-serif;`;
+        const heading = document.createElement('div');
+        heading.textContent = exportTitle || tile?.querySelector('.chart-title')?.textContent || 'Behavior overview';
+        heading.style.cssText = 'font-size:26px;font-weight:700;line-height:1.25;margin-bottom:16px;overflow-wrap:anywhere;';
+        stage.appendChild(heading);
 
-                card.querySelectorAll('#navigator-window-control, .navigator-window-input').forEach(input => input.remove());
-
-                if (legendItems.length) {
-                    const legend = clonedDocument.createElement('div');
-                    legend.style.cssText = 'position:absolute;left:10px;right:10px;bottom:5px;min-height:27px;background:white;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;z-index:5;font:600 13px Arial,sans-serif;color:#4b5563;';
-                    for (const item of legendItems) {
-                        const entry = clonedDocument.createElement('span');
-                        entry.style.cssText = 'display:inline-flex;align-items:center;gap:5px;white-space:nowrap;';
-                        const marker = clonedDocument.createElement('span');
-                        marker.style.cssText = `display:inline-block;width:11px;height:11px;background:${item.color};border-radius:2px;`;
-                        entry.append(marker, clonedDocument.createTextNode(item.text));
-                        legend.appendChild(entry);
-                    }
-                    card.appendChild(legend);
-                }
+        const legend = document.createElement('div');
+        legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
+        for (const item of tile?.querySelectorAll('.chart-legend-entry') || []) {
+            const entry = document.createElement('span');
+            // Inline blocks wrap between complete entries, never within names.
+            entry.style.cssText = 'display:inline-block;white-space:nowrap;margin:3px 14px;vertical-align:middle;';
+            const originalSwatch = item.querySelector('div');
+            if (originalSwatch) {
+                const swatch = originalSwatch.cloneNode(true);
+                swatch.style.display = 'inline-block';
+                swatch.style.verticalAlign = 'middle';
+                swatch.style.marginRight = '7px';
+                entry.appendChild(swatch);
             }
-        };
-        let pageCanvas;
-        try {
-            // Browser-native foreign-object rendering avoids failures when the
-            // component library uses newer CSS color functions.
-            pageCanvas = await window.html2canvas(root, {
-                ...captureOptions,
-                foreignObjectRendering: true
-            });
-        } catch (captureError) {
-            console.warn('Page capture failed; retrying with standard rendering.', captureError);
-            pageCanvas = await window.html2canvas(root, {
-                ...captureOptions,
-                foreignObjectRendering: false
-            });
+            const label = document.createElement('span');
+            label.textContent = [...item.querySelectorAll('.mud-typography')].map(node => node.textContent.trim()).join(' ');
+            label.style.cssText = 'white-space:nowrap;font-weight:600;vertical-align:middle;';
+            entry.appendChild(label);
+            legend.appendChild(entry);
         }
+        stage.appendChild(legend);
 
-        // Cropping the known-good page capture avoids html2canvas applying the
-        // tile's viewport offset twice when foreign-object rendering an element.
-        const scaleX = pageCanvas.width / viewportWidth;
-        const scaleY = pageCanvas.height / viewportHeight;
-        const sourceX = Math.max(0, Math.round(bounds.left * scaleX));
-        const sourceY = Math.max(0, Math.round(bounds.top * scaleY));
-        const sourceWidth = Math.min(pageCanvas.width - sourceX,
-            Math.round(bounds.width * scaleX));
-        const sourceHeight = Math.min(pageCanvas.height - sourceY,
-            Math.round(bounds.height * scaleY));
-        if (sourceWidth <= 0 || sourceHeight <= 0)
-            throw new Error('The main chart tile is outside the captured page.');
-
-        const tileCanvas = document.createElement('canvas');
-        tileCanvas.width = sourceWidth;
-        tileCanvas.height = sourceHeight;
-        tileCanvas.getContext('2d').drawImage(pageCanvas,
-            sourceX, sourceY, sourceWidth, sourceHeight,
-            0, 0, sourceWidth, sourceHeight);
-        return tileCanvas;
+        const plot = chart.cloneNode(true);
+        plot.removeAttribute('id');
+        plot.style.cssText = `position:relative;width:${bounds.width}px;height:${bounds.height}px;overflow:hidden;`;
+        plot.querySelectorAll('.apexcharts-toolbar, .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip, .apexcharts-legend').forEach(node => node.remove());
+        stage.appendChild(plot);
+        document.body.appendChild(stage);
+        try {
+            await document.fonts?.ready;
+            return await window.html2canvas(stage, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                useCORS: true,
+                allowTaint: false,
+                logging: false,
+                foreignObjectRendering: false,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(bounds.width + 32)),
+                windowHeight: Math.max(document.documentElement.clientHeight, stage.offsetHeight)
+            });
+        } finally {
+            stage.remove();
+        }
     },
 
     drawSummaryPage: function (pdf, summary, title, dateRange, pageWidth, pageHeight) {
