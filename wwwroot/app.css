@@ -108,9 +108,11 @@ html, body {
 }
 
 .hover-details-panel {
-    flex: 0 1 auto;
-    min-height: 140px;
-    max-height: 40%;
+    /* Give hover details first claim on space; controls scroll below them. */
+    order: -1;
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: calc(100% - 120px);
     overflow-y: auto !important;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;

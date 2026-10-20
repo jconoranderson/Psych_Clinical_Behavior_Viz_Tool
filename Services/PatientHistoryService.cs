@@ -36,8 +36,7 @@ namespace PsychDashboard.Services
             HashSet<string>? selectedShifts = null,
             string? selectedResident = null,
             DateTime? filterStartDate = null, 
-            DateTime? filterEndDate = null,
-            Dictionary<string, HashSet<string>>? hiddenSubcategories = null)
+            DateTime? filterEndDate = null)
         {
             var behaviorRecords = new List<BehaviorCsvRow>();
             var behaviorPath = _configuration?["DataSources:BehaviorCsvPath"];
@@ -73,7 +72,7 @@ namespace PsychDashboard.Services
                 _logger?.LogWarning("Configured medication CSV was not found at {MedicationCsvPath}", medicationPath);
             }
 
-            return Task.FromResult(ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate, hiddenSubcategories));
+            return Task.FromResult(ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate));
         }
 
         public Task<DashboardViewModel> GetPatientHistoryFromRecordsAsync(
@@ -82,12 +81,11 @@ namespace PsychDashboard.Services
             AggregationPeriod period, 
             HashSet<string>? selectedShifts = null,
             DateTime? filterStartDate = null, 
-            DateTime? filterEndDate = null,
-            Dictionary<string, HashSet<string>>? hiddenSubcategories = null)
+            DateTime? filterEndDate = null)
         {
             var viewModel = new DashboardViewModel();
             viewModel.Medications = medications;
-            return Task.FromResult(ProcessRecords(viewModel, behaviorRecords, new List<MedicationCsvRow>(), period, selectedShifts, null, filterStartDate, filterEndDate, hiddenSubcategories));
+            return Task.FromResult(ProcessRecords(viewModel, behaviorRecords, new List<MedicationCsvRow>(), period, selectedShifts, null, filterStartDate, filterEndDate));
         }
 
         private DashboardViewModel ProcessRecords(
@@ -98,8 +96,7 @@ namespace PsychDashboard.Services
             HashSet<string>? selectedShifts,
             string? selectedResident,
             DateTime? filterStartDate,
-            DateTime? filterEndDate,
-            Dictionary<string, HashSet<string>>? hiddenSubcategories)
+            DateTime? filterEndDate)
         {
             if (records.Any())
             {
@@ -160,21 +157,6 @@ namespace PsychDashboard.Services
                 {
                     filteredRecords = filteredRecords
                         .Where(r => selectedShifts.Contains(GetShift(r.Time)))
-                        .ToList();
-                }
-
-                if (hiddenSubcategories is { Count: > 0 })
-                {
-                    filteredRecords = filteredRecords
-                        .Where(record =>
-                        {
-                            var target = record.Target ?? "Unknown";
-                            if (!hiddenSubcategories.TryGetValue(target, out var hidden) || hidden.Count == 0)
-                                return true;
-
-                            var subcategories = ParseSubcategories(record.Subcategory);
-                            return subcategories.Count == 0 || subcategories.Any(subcategory => !hidden.Contains(subcategory));
-                        })
                         .ToList();
                 }
 

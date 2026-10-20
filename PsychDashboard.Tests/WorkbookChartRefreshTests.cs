@@ -66,32 +66,25 @@ public sealed class WorkbookChartRefreshTests
     }
 
     [Fact]
-    public async Task IsolatedSubcategoryFiltersChartAndHoverDetails()
+    public async Task HoverSubcategoriesCountShiftOccurrencesRatherThanEpisodes()
     {
-        var selector = new VariableSelector();
-        typeof(VariableSelector).GetProperty("AvailableSubcategories")!.SetValue(selector,
-            new Dictionary<string, List<string>> { ["Original"] = ["hitting", "grabbing"] });
-        await selector.IsolateSubcategory("Original", "hitting");
-        Assert.True(selector.GetTargetState("Original").Visible);
-        Assert.Equal(new[] { "grabbing" }, selector.GetHiddenSubcategories()["Original"]);
-
         var workbook = Workbook(2025, "Original");
         workbook.Behaviors[0].Subcategory = "hitting, grabbing";
+        workbook.Behaviors[0].Episode_Count = 5;
         workbook.Behaviors[1].Subcategory = "grabbing";
+        workbook.Behaviors[1].Episode_Count = 3;
         var service = new PatientHistoryService(null!, new ConfigurationBuilder().Build());
         var model = await service.GetPatientHistoryFromRecordsAsync(workbook.Behaviors, [],
-            AggregationPeriod.Month, hiddenSubcategories: selector.GetHiddenSubcategories());
-        Assert.Single(model.UnreducedBehaviorCounts);
-        Assert.Equal(1, Assert.Single(model.DailyBehaviorCounts).Count);
+            AggregationPeriod.Month);
+        Assert.Equal(8, Assert.Single(model.DailyBehaviorCounts).Count);
 
         using var page = new Home();
         Set(page, "_viewModel", model);
-        Set(page, "_variableSelector", selector);
         Set(page, "_selectedPeriod", AggregationPeriod.Month);
         await (Task)Invoke(page, "UpdateHoverDetails", model.DailyBehaviorCounts[0])!;
-        var details = Get<List<KeyValuePair<string, int>>>(page, "_hoveredSubcategories");
-        Assert.Equal("hitting", Assert.Single(details).Key);
-        Assert.Equal(1, details[0].Value);
+        var details = Get<List<KeyValuePair<string, int>>>(page, "_hoveredSubcategories").ToDictionary();
+        Assert.Equal(1, details["hitting"]);
+        Assert.Equal(2, details["grabbing"]);
     }
 
     [Theory]

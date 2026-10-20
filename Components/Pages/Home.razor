@@ -77,7 +77,6 @@
                 <div class="sidebar-variables">
                     <VariableSelector @ref="_variableSelector"
                                       AvailableTargets="SortedAvailableTargets"
-                                      AvailableSubcategories="_viewModel.AvailableSubcategories"
                                       ShowIntensity="_showIntensity"
                                       ShowIntensityChanged="OnShowIntensityChanged"
                                       ShowDuration="_showDuration"
@@ -100,7 +99,7 @@
                         <MudText Typo="Typo.caption" Style="font-weight: 600; display: block; text-align: center; margin-bottom: 8px;">@_hoveredTarget</MudText>
 
                         <MudDivider Class="mb-2" />
-                        <MudText Typo="Typo.caption" Style="font-weight: 700; display: block; text-align: center; margin-bottom: 4px;">Subcategories (shift)</MudText>
+                        <MudText Typo="Typo.caption" Style="font-weight: 700; display: block; text-align: center; margin-bottom: 4px;">Subcategories — shifts observed</MudText>
                         @if (_hoveredSubcategories.Any())
                         {
                             var maxSub = _hoveredSubcategories.Max(x => x.Value);
@@ -1736,7 +1735,6 @@
         var shifts = _selectedShifts != null ? new HashSet<string>(_selectedShifts) : null;
         DateTime? filterStart = _startDate ?? _dateRange?.Start;
         DateTime? filterEnd = _endDate ?? _dateRange?.End;
-        var hiddenSubcategories = _variableSelector?.GetHiddenSubcategories();
 
         if (!_useDataWarehouse)
         {
@@ -1754,32 +1752,32 @@
 
             _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                _selectedPeriod, shifts, filterStart, filterEnd, hiddenSubcategories);
+                _selectedPeriod, shifts, filterStart, filterEnd);
             if (refreshNavigator)
             {
                 _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                     _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
                     _selectedPeriod,
-                    shifts, null, null, hiddenSubcategories);
+                    shifts, null, null);
                 _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                     ? _fullHistoryViewModel
                     : await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                        AggregationPeriod.Month, shifts, null, null, hiddenSubcategories);
+                        AggregationPeriod.Month, shifts, null, null);
             }
         }
         else
         {
-            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, hiddenSubcategories);
+            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
             if (refreshNavigator)
             {
                 _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryAsync(
                     _selectedPeriod,
-                    shifts, _selectedResident, null, null, hiddenSubcategories);
+                    shifts, _selectedResident, null, null);
                 _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                     ? _fullHistoryViewModel
                     : await PatientHistoryService.GetPatientHistoryAsync(
-                        AggregationPeriod.Month, shifts, _selectedResident, null, null, hiddenSubcategories);
+                        AggregationPeriod.Month, shifts, _selectedResident, null, null);
             }
         }
 
@@ -1792,32 +1790,32 @@
                 {
                     _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                        _selectedPeriod, shifts, filterStart, filterEnd, hiddenSubcategories);
+                        _selectedPeriod, shifts, filterStart, filterEnd);
                     if (refreshNavigator)
                     {
                         _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                             _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
                             _selectedPeriod,
-                            shifts, null, null, hiddenSubcategories);
+                            shifts, null, null);
                         _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                             ? _fullHistoryViewModel
                             : await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                                AggregationPeriod.Month, shifts, null, null, hiddenSubcategories);
+                                AggregationPeriod.Month, shifts, null, null);
                     }
                 }
                 else
                 {
-                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, hiddenSubcategories);
+                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
                     if (refreshNavigator)
                     {
                         _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryAsync(
                             _selectedPeriod,
-                            shifts, _selectedResident, null, null, hiddenSubcategories);
+                            shifts, _selectedResident, null, null);
                         _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                             ? _fullHistoryViewModel
                             : await PatientHistoryService.GetPatientHistoryAsync(
-                                AggregationPeriod.Month, shifts, _selectedResident, null, null, hiddenSubcategories);
+                                AggregationPeriod.Month, shifts, _selectedResident, null, null);
                     }
                 }
             }
@@ -3545,13 +3543,10 @@
             .Where(x => x.Target == baseTarget && x.Date?.Date >= periodStart && x.Date?.Date <= periodEnd)
             .ToList();
 
-        var hiddenSubcategories = _variableSelector?.GetHiddenSubcategories();
-        var hidden = hiddenSubcategories != null && hiddenSubcategories.TryGetValue(baseTarget, out var selectedHidden)
-            ? selectedHidden : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allSubs = rawRecords
             .Where(x => !string.IsNullOrEmpty(x.Subcategory))
             .SelectMany(x => x.Subcategory.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Where(x => !x.Equals("Not Specified", StringComparison.OrdinalIgnoreCase) && !hidden.Contains(x))
+            .Where(x => !x.Equals("Not Specified", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         _hoveredSubcategories = allSubs

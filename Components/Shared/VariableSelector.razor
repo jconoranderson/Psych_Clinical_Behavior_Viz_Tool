@@ -30,34 +30,7 @@
                                aria-label="Change @target color"
                                @onchange="@((ChangeEventArgs e) => OnColorChanged(target, e.Value?.ToString() ?? "#1976d2"))" />
                     </label>
-                    @if (HasSubcategories(target))
-                    {
-                        <MudIconButton Icon="@(targetState.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
-                                       Size="MudBlazor.Size.Small"
-                                       OnClick="@(() => ToggleExpanded(target))" />
-                    }
                 </MudStack>
-
-                @if (targetState.Expanded && HasSubcategories(target))
-                {
-                    <MudStack Spacing="0" Class="ml-6">
-                        @foreach (var subcat in GetSubcategories(target))
-                        {
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Class="py-0">
-                                <MudCheckBox T="bool"
-                                             Value="@IsSubcategoryVisible(target, subcat)"
-                                             ValueChanged="@((bool val) => OnSubcategoryVisibilityChanged(target, subcat, val))"
-                                             Dense="true"
-                                             Size="MudBlazor.Size.Small"
-                                             Color="MudBlazor.Color.Secondary" />
-                                <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;"
-                                         title="Double-click to isolate this subcategory"
-                                         @onclick="@(() => OnSubcategoryVisibilityChanged(target, subcat, !IsSubcategoryVisible(target, subcat)))"
-                                         @ondblclick="@(() => IsolateSubcategory(target, subcat))">@subcat</MudText>
-                            </MudStack>
-                        }
-                    </MudStack>
-                }
             </MudStack>
         }
 
@@ -122,7 +95,6 @@
 
 @code {
     [Parameter] public List<string> AvailableTargets { get; set; } = new();
-    [Parameter] public Dictionary<string, List<string>> AvailableSubcategories { get; set; } = new();
     [Parameter] public List<string> AvailableMedications { get; set; } = new();
     [Parameter] public EventCallback OnStateChanged { get; set; }
 
@@ -163,9 +135,7 @@
     public class TargetState
     {
         public bool Visible { get; set; } = true;
-        public bool Expanded { get; set; } = false;
         public string Color { get; set; } = "#2196F3";
-        public HashSet<string> HiddenSubcategories { get; set; } = new();
     }
 
     private Dictionary<string, TargetState> _targetStates = new();
@@ -206,14 +176,6 @@
         return AvailableTargets.ToDictionary(t => t, t => GetTargetColor(t));
     }
 
-    public Dictionary<string, HashSet<string>> GetHiddenSubcategories() =>
-        _targetStates
-            .Where(entry => entry.Value.HiddenSubcategories.Count > 0)
-            .ToDictionary(
-                entry => entry.Key,
-                entry => entry.Value.HiddenSubcategories.ToHashSet(StringComparer.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase);
-
     // Medication State
     private HashSet<string> _hiddenMedications = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _medicationColors = new(StringComparer.OrdinalIgnoreCase);
@@ -239,18 +201,6 @@
         return AvailableMedications.Where(m => IsMedicationVisible(m)).ToHashSet();
     }
 
-    private bool HasSubcategories(string target) =>
-        AvailableSubcategories.ContainsKey(target) && AvailableSubcategories[target].Any();
-
-    private List<string> GetSubcategories(string target) =>
-        AvailableSubcategories.ContainsKey(target) ? AvailableSubcategories[target] : new();
-
-    private bool IsSubcategoryVisible(string target, string subcat)
-    {
-        var state = GetTargetState(target);
-        return !state.HiddenSubcategories.Contains(subcat);
-    }
-
     public async Task ToggleTargetVisibility(string target, bool visible)
     {
         GetTargetState(target).Visible = visible;
@@ -260,32 +210,6 @@
     private async Task OnColorChanged(string target, string color)
     {
         GetTargetState(target).Color = color;
-        await OnStateChanged.InvokeAsync();
-    }
-
-    private void ToggleExpanded(string target)
-    {
-        var state = GetTargetState(target);
-        state.Expanded = !state.Expanded;
-    }
-
-    private async Task OnSubcategoryVisibilityChanged(string target, string subcat, bool visible)
-    {
-        var state = GetTargetState(target);
-        if (visible)
-            state.HiddenSubcategories.Remove(subcat);
-        else
-            state.HiddenSubcategories.Add(subcat);
-        await OnStateChanged.InvokeAsync();
-    }
-
-    public async Task IsolateSubcategory(string target, string subcategory)
-    {
-        var state = GetTargetState(target);
-        state.Visible = true;
-        state.HiddenSubcategories = GetSubcategories(target)
-            .Where(candidate => !string.Equals(candidate, subcategory, StringComparison.OrdinalIgnoreCase))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         await OnStateChanged.InvokeAsync();
     }
 
