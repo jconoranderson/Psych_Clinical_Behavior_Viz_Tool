@@ -1,10 +1,15 @@
 /** Two-page landscape PDF export for the Psychology Visualization Tool. */
 window.chartExport = {
+    requestTitle: function (name) {
+        const suffix = window.prompt(`Optional chart title to add after "${name}". Leave blank to use the name only.`, '');
+        return suffix === null ? null : (suffix.trim() ? `${name} - ${suffix.trim()}` : name);
+    },
+
     exportToPdf: async function (title, dateRange, summary) {
         try {
             if (!window.html2canvas || !window.jspdf) throw new Error('PDF export libraries are unavailable.');
 
-            const canvas = await this.captureDashboard(summary || {});
+            const canvas = await this.captureDashboard(summary || {}, title);
 
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
@@ -40,7 +45,7 @@ window.chartExport = {
         }
     },
 
-    captureDashboard: async function (summary) {
+    captureDashboard: async function (summary, exportTitle) {
         const tile = document.querySelector('.chart-card');
         if (!tile) throw new Error('The main chart tile is unavailable.');
         const root = document.querySelector('.mud-layout') || document.body;
@@ -51,7 +56,7 @@ window.chartExport = {
             const input = document.getElementById(id);
             return { value: input?.value || '' };
         });
-        const title = tile.querySelector('.chart-title')?.textContent?.trim() || 'Behavior overview';
+        const title = exportTitle || tile.querySelector('.chart-title')?.textContent?.trim() || 'Behavior overview';
         const legendItems = [...tile.querySelectorAll('.apexcharts-legend-series')]
             .map(series => ({
                 text: series.querySelector('.apexcharts-legend-text')?.textContent?.trim() || '',
@@ -87,13 +92,13 @@ window.chartExport = {
                 card.querySelector('.chart-heading-row')?.remove();
                 card.querySelector('.dashboard-toolbar')?.remove();
                 const header = clonedDocument.createElement('div');
-                header.style.cssText = 'flex:0 0 auto;height:108px;box-sizing:border-box;padding:3px 6px 9px;border-bottom:1px solid #e8ecef;overflow:hidden;color:#1f2933;';
+                header.style.cssText = 'flex:0 0 auto;min-height:108px;box-sizing:border-box;padding:3px 6px 9px;border-bottom:1px solid #e8ecef;overflow:hidden;color:#1f2933;';
                 const eyebrow = clonedDocument.createElement('div');
                 eyebrow.textContent = 'BEHAVIOR OVERVIEW';
                 eyebrow.style.cssText = 'font:700 12px Arial,sans-serif;letter-spacing:1px;color:#75808b;height:18px;white-space:nowrap;';
                 const heading = clonedDocument.createElement('div');
                 heading.textContent = title;
-                heading.style.cssText = 'font:700 25px Arial,sans-serif;height:34px;line-height:30px;white-space:nowrap;';
+                heading.style.cssText = 'font:700 25px Arial,sans-serif;min-height:34px;line-height:30px;overflow-wrap:anywhere;';
                 const settings = clonedDocument.createElement('div');
                 const dateRange = dateValues.map(({ value }) => {
                     const parts = value.split('-');
@@ -172,119 +177,99 @@ window.chartExport = {
 
     drawSummaryPage: function (pdf, summary, title, dateRange, pageWidth, pageHeight) {
         const margin = 12;
-        const contentWidth = pageWidth - margin * 2;
-        const behaviors = summary.behaviors || [];
-        const medications = summary.medications || [];
-        const missingData = summary.missingData || [];
-        const text = value => value === null || value === undefined || value === '' ? '—' : String(value);
+        const width = pageWidth - 2 * margin;
+        const text = value => value == null || value === '' ? '—' : String(value);
         const number = value => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-
-        pdf.setFillColor(41, 54, 70);
-        pdf.rect(0, 0, pageWidth, 22, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(17);
-        pdf.text(text(summary.resident || title || 'Behavior History'), margin, 10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(9);
-        pdf.text('Dataset summary', margin, 16);
-        pdf.text('Generated ' + new Date().toLocaleString(), pageWidth - margin, 10, { align: 'right' });
-
-        let y = 29;
+        let y;
+        const header = () => {
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(18);
+            const lines = pdf.splitTextToSize(text(title || summary.resident || 'Behavior History'), width);
+            const height = 17 + lines.length * 7;
+            pdf.setFillColor(41, 54, 70);
+            pdf.rect(0, 0, pageWidth, height, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(lines, margin, 10);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(11);
+            pdf.text('Selected timeframe summary', margin, height - 4);
+            pdf.setTextColor(35, 43, 51);
+            y = height + 9;
+        };
+        const ensureSpace = height => {
+            if (y + height > pageHeight - 14) {
+                pdf.addPage('letter', 'landscape');
+                header();
+            }
+        };
+        const section = label => {
+            ensureSpace(18);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(14);
+            pdf.text(label, margin, y);
+            y += 6;
+        };
+        header();
         const overview = [
             ['Selected range', summary.dateRange || dateRange],
-            ['Recorded coverage', summary.dataCoverage],
-            ['Grouping / measure', text(summary.grouping) + ' / ' + text(summary.measure)],
-            ['View / shifts', text(summary.view) + ' / ' + text(summary.shifts)],
-            ['Active overlays', summary.overlays || 'None'],
+            ['View / shifts', `${text(summary.view)} / ${text(summary.shifts)}`],
             ['Total episodes', number(summary.totalEpisodes)]
         ];
-        const columnWidth = contentWidth / 3;
-        overview.forEach((item, index) => {
-            const x = margin + (index % 3) * columnWidth;
-            const rowY = y + Math.floor(index / 3) * 11;
+        overview.forEach(([label, value]) => {
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8.5);
-            pdf.setTextColor(105, 117, 128);
-            pdf.text(item[0].toUpperCase(), x, rowY);
+            pdf.setFontSize(11);
+            pdf.text(label, margin, y);
             pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(35, 43, 51);
-            pdf.text(pdf.splitTextToSize(text(item[1]), columnWidth - 7)[0], x, rowY + 4.5);
+            pdf.text(text(value), margin + 40, y);
+            y += 7;
         });
-
-        y += 27;
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
-        pdf.text('Behavior summary', margin, y);
         y += 4;
-
-        const headers = ['Behavior', 'Episodes', 'Mean rate', 'Periods', 'Avg intensity', 'Duration', 'First', 'Last'];
-        const widths = [52, 21, 22, 18, 24, 21, 29, 29];
-        const widthScale = contentWidth / widths.reduce((sum, width) => sum + width, 0);
-        const scaledWidths = widths.map(width => width * widthScale);
-        const rowHeight = Math.max(4, Math.min(6, 88 / Math.max(behaviors.length + 1, 1)));
-        const tableFontSize = rowHeight < 5 ? 6.2 : 7.3;
-
-        const drawRow = (cells, rowY, header) => {
-            let x = margin;
-            if (header) {
+        section('Behavior summary');
+        const widths = [width * .46, width * .18, width * .18, width * .18];
+        const drawRow = (cells, isHeader = false) => {
+            pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
+            pdf.setFontSize(11);
+            const lines = cells.map((value, index) => pdf.splitTextToSize(text(value), widths[index] - 4));
+            const height = Math.max(...lines.map(value => value.length)) * 5 + 4;
+            ensureSpace(height);
+            pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
+            pdf.setFontSize(11);
+            if (isHeader) {
                 pdf.setFillColor(232, 236, 241);
-                pdf.rect(margin, rowY, contentWidth, rowHeight, 'F');
-                pdf.setFont('helvetica', 'bold');
-            } else pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(tableFontSize);
-            pdf.setTextColor(35, 43, 51);
-            cells.forEach((cell, index) => {
-                pdf.text(pdf.splitTextToSize(text(cell), scaledWidths[index] - 2)[0], x + 1, rowY + rowHeight - 1.4);
-                x += scaledWidths[index];
+                pdf.rect(margin, y, width, height, 'F');
+            }
+            let x = margin;
+            lines.forEach((value, index) => {
+                pdf.text(value, x + 2, y + 5);
+                x += widths[index];
             });
+            y += height;
             pdf.setDrawColor(218, 223, 229);
-            pdf.line(margin, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
+            pdf.line(margin, y, margin + width, y);
         };
-
-        drawRow(headers, y, true);
-        y += rowHeight;
-        behaviors.forEach(item => {
-            drawRow([
-                item.behavior, number(item.totalEpisodes), number(item.meanRate), number(item.recordedPeriods),
-                item.averageIntensity == null ? 'Unavailable' : number(item.averageIntensity),
-                item.totalDuration > 0 ? number(item.totalDuration) : 'Unavailable',
-                item.firstPeriod, item.lastPeriod
-            ], y, false);
-            y += rowHeight;
-        });
-        if (!behaviors.length) {
-            drawRow(['No behavior data in the selected range', '', '', '', '', '', '', ''], y, false);
-            y += rowHeight;
+        drawRow(['Behavior', 'Episodes', 'Mean rate', 'Periods'], true);
+        for (const item of summary.behaviors || []) {
+            drawRow([item.behavior, number(item.totalEpisodes), number(item.meanRate), number(item.recordedPeriods)]);
         }
-
-        y += 7;
-        const halfWidth = (contentWidth - 8) / 2;
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        pdf.text('Medications', margin, y);
-        pdf.text('Missing data', margin + halfWidth + 8, y);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.5);
-        const lineCount = Math.max(1, Math.floor((pageHeight - y - 15) / 5));
-
-        const medLines = medications.length ? medications : [{ medication: 'None in selected range' }];
-        medLines.slice(0, lineCount).forEach((item, index) => {
+        if (!summary.behaviors?.length) drawRow(['No behavior data in the selected range', '', '', '']);
+        y += 10;
+        section('Medication Change');
+        const medications = summary.medications?.length ? summary.medications : [{ medication: 'None in selected range' }];
+        for (const item of medications) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(11);
             const line = item.doseRange ? `${item.medication}: ${item.doseRange}  (${item.start} – ${item.end})` : item.medication;
-            pdf.text(pdf.splitTextToSize(text(line), halfWidth)[0], margin, y + 6 + index * 5);
-        });
-        if (medLines.length > lineCount) pdf.text(`+ ${medLines.length - lineCount} additional medication(s)`, margin, y + 6 + (lineCount - 1) * 5);
-
-        const missingLines = missingData.length ? missingData : [{ reason: 'None in selected range' }];
-        missingLines.slice(0, lineCount).forEach((item, index) => {
-            const line = item.start ? `${item.reason}: ${item.start} – ${item.end}` : item.reason;
-            pdf.text(pdf.splitTextToSize(text(line), halfWidth)[0], margin + halfWidth + 8, y + 6 + index * 5);
-        });
-        if (missingLines.length > lineCount) pdf.text(`+ ${missingLines.length - lineCount} additional range(s)`, margin + halfWidth + 8, y + 6 + (lineCount - 1) * 5);
-
-        pdf.setTextColor(120, 130, 140);
-        pdf.setFontSize(7);
-        pdf.text('Rates are mean displayed-period rates; duration is the total recorded duration count for the selected range.', margin, pageHeight - 6);
-        pdf.text('Page 2 of 2', pageWidth - margin, pageHeight - 6, { align: 'right' });
+            const lines = pdf.splitTextToSize(line, width);
+            ensureSpace(lines.length * 5 + 3);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(11);
+            pdf.text(lines, margin, y + 4);
+            y += lines.length * 5 + 3;
+        }
+        ensureSpace(12);
+        y += 7;
+        pdf.setTextColor(100, 110, 120);
+        pdf.setFontSize(10);
+        pdf.text('Mean rate is the average of the displayed-period rates within the selected range.', margin, y);
     }
 };

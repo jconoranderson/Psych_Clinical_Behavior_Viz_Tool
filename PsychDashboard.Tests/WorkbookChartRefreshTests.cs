@@ -110,6 +110,32 @@ public sealed class WorkbookChartRefreshTests
         Assert.Equal(0m, (decimal)axis.Max % 5);
     }
 
+    [Fact]
+    public async Task PdfSummaryUsesSelectedDaysIncludingEndOfFinalMonth()
+    {
+        using var page = new Home();
+        typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
+        var workbook = Workbook(2025, "Original");
+        workbook.Behaviors[0].Episode_Count = 100;
+        workbook.Behaviors[1].Episode_Count = 7;
+        Set(page, "_parsedWorkbook", workbook);
+        Set(page, "_selectedPeriod", AggregationPeriod.Month);
+        await LoadDefaultWindow(page, true);
+        Set(page, "_startDate", new DateTime(2025, 1, 10));
+        Set(page, "_endDate", new DateTime(2025, 1, 31));
+        Set(page, "_dateRange", new MudBlazor.DateRange(new DateTime(2025, 1, 10), new DateTime(2025, 1, 31)));
+        await (Task)Invoke(page, "LoadDataAsync", false)!;
+        var summary = System.Text.Json.JsonSerializer.SerializeToElement(Invoke(page, "BuildPdfSummary", "Test - Review"));
+        Assert.Equal("Test - Review", summary.GetProperty("Resident").GetString());
+        Assert.Equal(7, summary.GetProperty("TotalEpisodes").GetInt32());
+        var med = Assert.Single(summary.GetProperty("Medications").EnumerateArray());
+        Assert.Equal("Jan 10, 2025", med.GetProperty("Start").GetString());
+        Assert.Equal("Jan 31, 2025", med.GetProperty("End").GetString());
+        Assert.False(summary.TryGetProperty("MissingData", out _));
+        Assert.False(summary.GetProperty("Behaviors")[0].TryGetProperty("AverageIntensity", out _));
+    }
+
     private static ParsedWorkbookResult Workbook(int year, string name) => new()
     {
         Behaviors = new[] { 1, 31 }.Select(day => new PatientHistoryService.BehaviorCsvRow

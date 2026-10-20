@@ -3275,57 +3275,52 @@
 
     private async Task ExportToPdf()
     {
-        var dateRangeText = _dateRange?.Start != null && _dateRange?.End != null
-            ? $"{_dateRange.Start.Value:MMM dd, yyyy} – {_dateRange.End.Value:MMM dd, yyyy}"
-            : "All dates";
+        var title = await JS.InvokeAsync<string?>("chartExport.requestTitle", _chartTitle);
+        if (title == null) return;
 
+        // Rebuild from the selected dates, including partial aggregation periods.
+        await LoadDataAsync(refreshNavigator: false);
+        var summary = BuildPdfSummary(title);
+        await JS.InvokeVoidAsync("chartExport.exportToPdf", title, summary.DateRange, summary);
+    }
+
+    private PdfSummary BuildPdfSummary(string title)
+    {
+        var start = (_startDate ?? _dateRange?.Start ?? _viewModel?.GlobalMinDate)?.Date;
+        var end = (_endDate ?? _dateRange?.End ?? _viewModel?.GlobalMaxDate)?.Date;
+        var dateRangeText = start.HasValue && end.HasValue
+            ? $"{start:MMM dd, yyyy} – {end:MMM dd, yyyy}"
+            : "No selected dates";
         var behaviorSummary = VisibleTargets.Select(target =>
         {
             var points = FilteredBehaviorCounts
-                .Where(item => item.Target == target && item.HasData)
-                .OrderBy(item => item.Date)
-                .ToList();
-            var intensityBuckets = points.SelectMany(item => item.IntensityBuckets.Select((count, index) => new { count, index }));
-            var intensityCount = intensityBuckets.Sum(item => item.count);
-            var weightedIntensity = intensityBuckets.Sum(item => item.count * (item.index + 1));
-
+                .Where(item => item.Target == target && item.HasData).ToList();
             return new
             {
                 Behavior = target,
                 TotalEpisodes = points.Sum(item => item.Count),
                 MeanRate = points.Count == 0 ? 0 : Math.Round(points.Average(item => item.Rate), 2),
-                RecordedPeriods = points.Count,
-                AverageIntensity = intensityCount > 0 ? Math.Round(weightedIntensity / intensityCount, 2) : (double?)null,
-                TotalDuration = Math.Round(points.Sum(item => item.TotalDuration), 1),
-                FirstPeriod = points.FirstOrDefault()?.Date.ToString("MMM d, yyyy") ?? "—",
-                LastPeriod = points.LastOrDefault()?.Date.ToString("MMM d, yyyy") ?? "—"
+                RecordedPeriods = points.Count
             };
         }).ToList();
 
-        var chartDates = FilteredBehaviorCounts.Select(item => item.Date.Date).ToList();
-        var chartStart = chartDates.Count > 0 ? chartDates.Min() : (DateTime?)null;
-        var chartEnd = chartDates.Count > 0 ? chartDates.Max() : (DateTime?)null;
         var medicationSummary = (_viewModel?.UnreducedMedications ?? new())
-            .Where(item => (!chartStart.HasValue || item.Date.Date >= chartStart) &&
-                           (!chartEnd.HasValue || item.Date.Date <= chartEnd))
-            .GroupBy(item => item.Name)
+            .Where(item => start.HasValue && end.HasValue &&
+                item.Date.Date >= start.Value && item.Date.Date <= end.Value)
+            .GroupBy(item => new { item.Name, item.Unit })
             .Select(group => new
             {
-                Medication = group.Key,
-                DoseRange = $"{group.Min(item => item.Dose):0.##}–{group.Max(item => item.Dose):0.##} {group.First().Unit}".Trim(),
+                Medication = group.Key.Name,
+                DoseRange = $"{group.Min(item => item.Dose):0.##}–{group.Max(item => item.Dose):0.##} {group.Key.Unit}".Trim(),
                 Start = group.Min(item => item.Date).ToString("MMM d, yyyy"),
                 End = group.Max(item => item.Date).ToString("MMM d, yyyy")
             })
-            .OrderBy(item => item.Medication)
-            .ToList();
+            .OrderBy(item => item.Medication).ToList();
 
-        var summary = new
+        return new PdfSummary
         {
-            Resident = _chartTitle,
+            Resident = title,
             DateRange = dateRangeText,
-            DataCoverage = chartStart.HasValue && chartEnd.HasValue
-                ? $"{chartStart.Value:MMM d, yyyy} – {chartEnd.Value:MMM d, yyyy}"
-                : "No recorded data",
             Grouping = _selectedPeriod.ToString(),
             Measure = _yAxisMetric.ToString(),
             View = _chartType.ToString(),
@@ -3340,20 +3335,22 @@
             }.Where(value => value != null)),
             TotalEpisodes = behaviorSummary.Sum(item => item.TotalEpisodes),
             Behaviors = behaviorSummary,
-            Medications = medicationSummary,
-            MissingData = (_viewModel?.MissingDataRanges ?? new())
-                .Where(range => (!chartStart.HasValue || range.End >= chartStart) &&
-                                (!chartEnd.HasValue || range.Start <= chartEnd))
-                .Select(range => new
-                {
-                    range.Reason,
-                    Start = range.Start.ToString("MMM d, yyyy"),
-                    End = range.End.ToString("MMM d, yyyy")
-                })
-                .ToList()
+            Medications = medicationSummary
         };
+    }
 
-        await JS.InvokeVoidAsync("chartExport.exportToPdf", _chartTitle, dateRangeText, summary);
+    private sealed class PdfSummary
+    {
+        public string Resident { get; init; } = "";
+        public string DateRange { get; init; } = "";
+        public string Grouping { get; init; } = "";
+        public string Measure { get; init; } = "";
+        public string View { get; init; } = "";
+        public string Shifts { get; init; } = "";
+        public string Overlays { get; init; } = "";
+        public int TotalEpisodes { get; init; }
+        public object Behaviors { get; init; } = new object[0];
+        public object Medications { get; init; } = new object[0];
     }
 
     private List<string> GenerateGradient(string baseHex, int steps)
