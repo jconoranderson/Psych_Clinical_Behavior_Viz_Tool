@@ -95,6 +95,8 @@ html, body {
 }
 
 .sidebar-panels {
+    position: relative;
+    isolation: isolate;
     flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
@@ -108,11 +110,12 @@ html, body {
 }
 
 .hover-details-panel {
-    /* Give hover details first claim on space; controls scroll below them. */
-    order: -1;
-    flex: 0 0 auto;
+    /* Stay at the bottom and grow over the controls instead of moving them. */
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 1;
     min-height: 0;
-    max-height: calc(100% - 120px);
+    max-height: 100%;
     overflow-y: auto !important;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
