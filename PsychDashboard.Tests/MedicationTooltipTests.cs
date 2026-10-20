@@ -40,6 +40,14 @@ public sealed class MedicationTooltipTests
         Invoke(page, "BuildChartOptions");
         var options = (ApexChartOptions<DailyBehaviorCount>)Field("_options").GetValue(page)!;
         var change = Assert.Single(options.Annotations.Points);
+        Assert.StartsWith("medication-change-hit-", change.Id);
+        Assert.Equal("medication-change-arrow", change.Label.Style.CssClass);
+        var tooltip = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(
+            change.Id["medication-change-hit-".Length..])).RootElement;
+        Assert.Equal("Example (mg)", tooltip.GetProperty("name").GetString());
+        Assert.Equal("Jan 15, 2025", tooltip.GetProperty("date").GetString());
+        Assert.Equal(10, tooltip.GetProperty("previousDose").GetDecimal());
+        Assert.Equal(25, tooltip.GetProperty("currentDose").GetDecimal());
         var expectedX = period == AggregationPeriod.Month
             ? -0.5 + 14d / 31
             : new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();

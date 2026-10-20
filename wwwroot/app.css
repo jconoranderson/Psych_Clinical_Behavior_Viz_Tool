@@ -391,3 +391,21 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* The transparent annotation background provides a larger arrow hit area. */
+rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
+.medication-change-arrow { pointer-events: none; }
+.medication-change-tooltip {
+    position: fixed;
+    z-index: 1500;
+    pointer-events: none;
+    max-width: calc(100vw - 16px);
+    padding: 10px 12px;
+    border: 1px solid #dce1e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #263238;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+    font-size: 12px;
+    line-height: 1.6;
+}

@@ -166,18 +166,60 @@
         }
     }
 
+    function hideMedicationChange() {
+        document.getElementById("medication-change-tooltip")?.remove();
+    }
+
+    function showMedicationChange(element, change) {
+        hideMedicationChange();
+        const tooltip = document.createElement("div");
+        tooltip.id = "medication-change-tooltip";
+        tooltip.className = "medication-change-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        const heading = document.createElement("strong");
+        heading.textContent = change.name;
+        const date = document.createElement("div");
+        date.textContent = change.date;
+        const dose = document.createElement("div");
+        dose.textContent = `${change.previousDose} → ${change.currentDose} (${change.currentDose > change.previousDose ? "increase" : "decrease"})`;
+        tooltip.append(heading, date, dose);
+        document.body.appendChild(tooltip);
+        const anchor = element.getBoundingClientRect();
+        const bounds = tooltip.getBoundingClientRect();
+        tooltip.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8))}px`;
+        const above = anchor.top - bounds.height - 8;
+        tooltip.style.top = `${Math.max(8, above >= 8 ? above : Math.min(anchor.bottom + 8, window.innerHeight - bounds.height - 8))}px`;
+    }
+
     function initialize(dotNetReference) {
         if (dotNetReference) dashboardReference = dotNetReference;
+        hideMedicationChange();
         updateMonthlyAxisLabels();
         updateMonthlyNavigatorWindow();
         if (!monthlyAxisResizeInstalled) {
             monthlyAxisResizeInstalled = true;
-            window.addEventListener("resize", () => updateMonthlyAxisLabels());
+            window.addEventListener("resize", () => { hideMedicationChange(); updateMonthlyAxisLabels(); });
+            window.addEventListener("scroll", hideMedicationChange, true);
         }
 
         if (!resetHandlerInstalled) {
             resetHandlerInstalled = true;
+            // Delegation survives Apex replacing annotations during zoom and redraw.
+            const medicationArrow = target => target instanceof Element
+                ? target.closest('[class*="medication-change-hit-"]') : null;
+            document.addEventListener("mouseover", event => {
+                const arrow = medicationArrow(event.target);
+                if (!arrow || arrow.contains(event.relatedTarget)) return;
+                const key = [...arrow.classList].find(name => name.startsWith("medication-change-hit-"));
+                const change = JSON.parse(atob(key.slice("medication-change-hit-".length)));
+                showMedicationChange(arrow, change);
+            });
+            document.addEventListener("mouseout", event => {
+                const arrow = medicationArrow(event.target);
+                if (arrow && !arrow.contains(event.relatedTarget)) hideMedicationChange();
+            });
             document.addEventListener("click", function (event) {
+                hideMedicationChange();
                 const details = document.querySelector(".hover-details-panel");
                 if (details && !details.contains(event.target) && dashboardReference) {
                     dashboardReference.invokeMethodAsync("DismissHoverDetails");
@@ -294,5 +336,5 @@
             performance.now() < suppressChartZoomEventsUntil;
     }
 
-    window.chartNavigator = { initialize, shouldSuppressChartZoomEvent };
+    window.chartNavigator = { initialize, shouldSuppressChartZoomEvent, showMedicationChange, hideMedicationChange };
 })();

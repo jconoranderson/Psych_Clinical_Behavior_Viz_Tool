@@ -3160,6 +3160,13 @@
 
                         annotations.Points.Add(new AnnotationsPoint
                         {
+                            Id = "medication-change-hit-" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+                                System.Text.Json.JsonSerializer.Serialize(new {
+                                    name = seriesName,
+                                    date = currentDate.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                                    previousDose,
+                                    currentDose
+                                }))),
                             X = GetMedicationAnnotationXValue(markerDate),
                             Y = logY,
                             YAxisIndex = medicationYAxisIndex,
@@ -3174,6 +3181,7 @@
                                 BorderWidth = 0,
                                 Style = new Style 
                                 { 
+                                    CssClass = "medication-change-arrow",
                                     Color = medColor, 
                                     Background = "transparent", 
                                     FontSize = "20px"
