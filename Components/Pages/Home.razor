@@ -456,6 +456,125 @@
                 }
                 else
                 {
+                @* Custom split legend for normal (line/bar) mode *@
+                @if (!IsOverlayStackedMode)
+                {
+                    <MudStack Spacing="1" Class="mb-2 px-2">
+                        @* Behaviors row *@
+                        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
+                            @foreach (var target in VisibleTargets)
+                            {
+                                var tc = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <div style="width:12px; height:12px; border-radius:2px; background:@tc;"></div>
+                                    <MudText Typo="Typo.caption" Style="font-weight:600;">@target</MudText>
+                                </MudStack>
+                            }
+                        </MudStack>
+                        @* Medications row (only shown when meds overlay is active) *@
+                        @if (_renderedChartState.ShowMedications && validMedsList.Any())
+                        {
+                            <MudDivider Class="my-1" />
+                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
+                                @foreach (var medicationSeries in validMedsList)
+                                {
+                                    var medicationName = GetMedicationName(medicationSeries);
+                                    var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                        <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
+                                        <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
+                                    </MudStack>
+                                }
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+
+                @* Custom legend for stacked mode — clean, non-crowded *@
+                @if (IsOverlayStackedMode)
+                {
+                    <MudStack Spacing="2" Class="mb-2 px-2">
+                        @* Behavior labels with gradient swatch *@
+                        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
+                            @foreach (var target in VisibleTargets)
+                            {
+                                var targetColor = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
+                                var targetMetric = GetTargetOverlayMetric(target, _renderedChartState);
+                                var hasIntensity = targetMetric == OverlayMetric.Intensity && _targetsWithIntensityData.Contains(target);
+                                var hasDuration = targetMetric == OverlayMetric.Duration && _targetsWithDurationData.Contains(target);
+                                var metricLabel = hasIntensity
+                                    ? "severity"
+                                    : (hasDuration
+                                        ? "duration"
+                                        : (targetMetric == OverlayMetric.Intensity ? "intensity unavailable" : "duration unavailable"));
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    @if (hasIntensity || hasDuration)
+                                    {
+                                        @* Gradient swatch showing light→dark of behavior color *@
+                                        var steps = 5;
+                                        var grad = GenerateGradient(targetColor, steps);
+                                        <div style="display:flex; border-radius:2px; overflow:hidden; opacity: 0.8;">
+                                            @foreach (var c in grad)
+                                            {
+                                                <div style="width:5px; height:12px; background:@c;"></div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div style="width:12px; height:12px; border-radius:2px; background:@targetColor; opacity: 0.8;"></div>
+                                    }
+                                    <MudText Typo="Typo.caption" Style="font-weight:600; cursor: pointer; user-select: none;"
+                                             @onclick="@(() => ToggleTargetFromLegend(target))"
+                                             @ondblclick="@(() => IsolateTargetFromLegend(target))">
+                                        @target
+                                    </MudText>
+                                    @if (!string.IsNullOrEmpty(metricLabel))
+                                    {
+                                        <MudText Typo="Typo.caption" Style="color:#888; font-style:italic;">(@metricLabel)</MudText>
+                                    }
+                                </MudStack>
+                            }
+                        </MudStack>
+
+                        @* Scale key — light = low, dark = high *@
+                        <MudStack Row="true" Spacing="1" Justify="Justify.Center" AlignItems="AlignItems.Center">
+                            @if (_renderedChartState.ShowIntensity && _targetsWithIntensityData.Any())
+                            {
+                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Light = @IntensityLabels[0]</MudText>
+                                <MudText Typo="Typo.caption" Style="color:#bbb; font-size:0.6rem;">→</MudText>
+                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Dark = @IntensityLabels[^1]</MudText>
+                            }
+                            @if (_renderedChartState.ShowDuration && _targetsWithDurationData.Any())
+                            {
+                                @if (_renderedChartState.ShowIntensity && _targetsWithIntensityData.Any())
+                                {
+                                    <MudDivider Vertical="true" FlexItem="true" Style="height:12px; margin:0 8px;" />
+                                }
+                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Light = @DurationLabels[0]</MudText>
+                                <MudText Typo="Typo.caption" Style="color:#bbb; font-size:0.6rem;">→</MudText>
+                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Dark = @DurationLabels[^1]</MudText>
+                            }
+                        </MudStack>
+
+                        @if (_renderedChartState.ShowMedications && validMedsList.Any())
+                        {
+                            <MudDivider Class="my-1" />
+                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
+                                @foreach (var medicationSeries in validMedsList)
+                                {
+                                    var medicationName = GetMedicationName(medicationSeries);
+                                    var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                        <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
+                                        <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
+                                    </MudStack>
+                                }
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+
                 <div style="flex-grow: 1; display: grid; grid-template-rows: minmax(260px, 1fr) 135px; min-height: 0;">
                     <div id="behavior-main-chart-container"
                          class="@(_selectedPeriod == AggregationPeriod.Month ? "monthly-chart-container" : "")"
@@ -750,124 +869,7 @@
                     }
                 </div>
 
-                @* Custom split legend for normal (line/bar) mode *@
-                @if (!IsOverlayStackedMode)
-                {
-                    <MudStack Spacing="1" Class="mt-2 px-2">
-                        @* Behaviors row *@
-                        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
-                            @foreach (var target in VisibleTargets)
-                            {
-                                var tc = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                    <div style="width:12px; height:12px; border-radius:2px; background:@tc;"></div>
-                                    <MudText Typo="Typo.caption" Style="font-weight:600;">@target</MudText>
-                                </MudStack>
-                            }
-                        </MudStack>
-                        @* Medications row (only shown when meds overlay is active) *@
-                        @if (_renderedChartState.ShowMedications && validMedsList.Any())
-                        {
-                            <MudDivider Class="my-1" />
-                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
-                                @foreach (var medicationSeries in validMedsList)
-                                {
-                                    var medicationName = GetMedicationName(medicationSeries);
-                                    var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                        <div style="width:22px; height:3px; background:@medicationColor; border-radius:2px;"></div>
-                                        <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
-                                    </MudStack>
-                                }
-                            </MudStack>
-                        }
-                    </MudStack>
-                }
 
-                @* Custom legend for stacked mode — clean, non-crowded *@
-                @if (IsOverlayStackedMode)
-                {
-                    <MudStack Spacing="2" Class="mt-3 px-2">
-                        @* Behavior labels with gradient swatch *@
-                        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
-                            @foreach (var target in VisibleTargets)
-                            {
-                                var targetColor = _variableSelector?.GetTargetColor(target) ?? "#2196F3";
-                                var targetMetric = GetTargetOverlayMetric(target, _renderedChartState);
-                                var hasIntensity = targetMetric == OverlayMetric.Intensity && _targetsWithIntensityData.Contains(target);
-                                var hasDuration = targetMetric == OverlayMetric.Duration && _targetsWithDurationData.Contains(target);
-                                var metricLabel = hasIntensity
-                                    ? "severity"
-                                    : (hasDuration
-                                        ? "duration"
-                                        : (targetMetric == OverlayMetric.Intensity ? "intensity unavailable" : "duration unavailable"));
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                    @if (hasIntensity || hasDuration)
-                                    {
-                                        @* Gradient swatch showing light→dark of behavior color *@
-                                        var steps = 5;
-                                        var grad = GenerateGradient(targetColor, steps);
-                                        <div style="display:flex; border-radius:2px; overflow:hidden; opacity: 0.8;">
-                                            @foreach (var c in grad)
-                                            {
-                                                <div style="width:5px; height:12px; background:@c;"></div>
-                                            }
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div style="width:12px; height:12px; border-radius:2px; background:@targetColor; opacity: 0.8;"></div>
-                                    }
-                                    <MudText Typo="Typo.caption" Style="font-weight:600; cursor: pointer; user-select: none;"
-                                             @onclick="@(() => ToggleTargetFromLegend(target))"
-                                             @ondblclick="@(() => IsolateTargetFromLegend(target))">
-                                        @target
-                                    </MudText>
-                                    @if (!string.IsNullOrEmpty(metricLabel))
-                                    {
-                                        <MudText Typo="Typo.caption" Style="color:#888; font-style:italic;">(@metricLabel)</MudText>
-                                    }
-                                </MudStack>
-                            }
-                        </MudStack>
-
-                        @* Scale key — light = low, dark = high *@
-                        <MudStack Row="true" Spacing="1" Justify="Justify.Center" AlignItems="AlignItems.Center">
-                            @if (_renderedChartState.ShowIntensity && _targetsWithIntensityData.Any())
-                            {
-                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Light = @IntensityLabels[0]</MudText>
-                                <MudText Typo="Typo.caption" Style="color:#bbb; font-size:0.6rem;">→</MudText>
-                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Dark = @IntensityLabels[^1]</MudText>
-                            }
-                            @if (_renderedChartState.ShowDuration && _targetsWithDurationData.Any())
-                            {
-                                @if (_renderedChartState.ShowIntensity && _targetsWithIntensityData.Any())
-                                {
-                                    <MudDivider Vertical="true" FlexItem="true" Style="height:12px; margin:0 8px;" />
-                                }
-                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Light = @DurationLabels[0]</MudText>
-                                <MudText Typo="Typo.caption" Style="color:#bbb; font-size:0.6rem;">→</MudText>
-                                <MudText Typo="Typo.caption" Style="color:#999; font-size:0.65rem;">Dark = @DurationLabels[^1]</MudText>
-                            }
-                        </MudStack>
-
-                        @if (_renderedChartState.ShowMedications && validMedsList.Any())
-                        {
-                            <MudDivider Class="my-1" />
-                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="flex-wrap: wrap;">
-                                @foreach (var medicationSeries in validMedsList)
-                                {
-                                    var medicationName = GetMedicationName(medicationSeries);
-                                    var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                        <div style="width:22px; height:3px; background:@medicationColor; border-radius:2px;"></div>
-                                        <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
-                                    </MudStack>
-                                }
-                            </MudStack>
-                        }
-                    </MudStack>
-                }
                 }
             }
         </MudPaper>
@@ -2688,6 +2690,8 @@
                         Format = _selectedPeriod is AggregationPeriod.Week or AggregationPeriod.Month ? null : xAxisFormat,
                         Formatter = xAxisLabelFormatter,
                         DatetimeUTC = false,
+                        HideOverlappingLabels = true,
+                        Rotate = -45,
                         ShowDuplicates = false
                     },
                     Min = _selectedPeriod switch

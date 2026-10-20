@@ -104,6 +104,7 @@
         }
 
         layer.replaceChildren();
+        let previousLabelRight = -Infinity;
         for (let index = Math.max(0, firstVisible);
              index <= Math.min(monthCount - 1, lastVisible); index++) {
             const monthDate = new Date(Date.UTC(0, 0, 1));
@@ -117,6 +118,15 @@
             label.style.left = `${labelOrigin + index * labelStep}px`;
             label.style.top = `${gridBounds.bottom - containerBounds.top + 8}px`;
             layer.appendChild(label);
+            // These HTML labels bypass ApexCharts' collision handling. Measure
+            // their actual width so dense ranges stay readable at any zoom.
+            const bounds = label.getBoundingClientRect();
+            if (bounds.left < previousLabelRight + 12 ||
+                bounds.left < containerBounds.left || bounds.right > containerBounds.right) {
+                label.remove();
+            } else {
+                previousLabelRight = bounds.right;
+            }
         }
     }
 
