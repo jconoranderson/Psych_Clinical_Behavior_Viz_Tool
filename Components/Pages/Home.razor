@@ -479,7 +479,7 @@
                                 {
                                     var medicationName = GetMedicationName(medicationSeries);
                                     var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry" data-legend-kind="medication">
                                         <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
                                         <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
                                     </MudStack>
@@ -564,7 +564,7 @@
                                 {
                                     var medicationName = GetMedicationName(medicationSeries);
                                     var medicationColor = _variableSelector?.GetMedicationColor(medicationName) ?? "#3e2723";
-                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry">
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry" data-legend-kind="medication">
                                         <div style="width:32px; height:5px; background:@medicationColor; border-radius:2px;"></div>
                                         <MudText Typo="Typo.caption" Style="font-weight:500;">@medicationSeries</MudText>
                                     </MudStack>
@@ -3275,13 +3275,21 @@
 
     private async Task ExportToPdf()
     {
-        var title = await JS.InvokeAsync<string?>("chartExport.requestTitle", _chartTitle);
-        if (title == null) return;
+        var options = await JS.InvokeAsync<PdfExportOptions?>("chartExport.requestOptions", _chartTitle);
+        if (options == null) return;
+        var title = options.Title;
 
         // Rebuild from the selected dates, including partial aggregation periods.
         await LoadDataAsync(refreshNavigator: false);
         var summary = BuildPdfSummary(title);
-        await JS.InvokeVoidAsync("chartExport.exportToPdf", title, summary.DateRange, summary);
+        await JS.InvokeVoidAsync("chartExport.exportToPdf", title, summary.DateRange, summary, options.Narrative);
+    }
+
+    private sealed class PdfExportOptions
+    {
+        public PdfExportOptions() { }
+        public string Title { get; set; } = "";
+        public string Narrative { get; set; } = "";
     }
 
     private PdfSummary BuildPdfSummary(string title)

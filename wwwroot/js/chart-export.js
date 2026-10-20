@@ -1,11 +1,61 @@
 /** Chart and summary landscape PDF export for the Psychology Visualization Tool. */
 window.chartExport = {
-    requestTitle: function (name) {
-        const suffix = window.prompt(`Optional chart title to add after "${name}". Leave blank to use the name only.`, '');
-        return suffix === null ? null : (suffix.trim() ? `${name} - ${suffix.trim()}` : name);
+    requestOptions: function (name) {
+        return new Promise(resolve => {
+            const dialog = document.createElement('dialog');
+            dialog.className = 'pdf-export-dialog';
+            dialog.setAttribute('aria-labelledby', 'pdf-export-heading');
+            const form = document.createElement('form');
+            form.method = 'dialog';
+            const heading = document.createElement('h2');
+            heading.id = 'pdf-export-heading';
+            heading.textContent = 'Export chart to PDF';
+            const titleLabel = document.createElement('label');
+            titleLabel.htmlFor = 'pdf-title-suffix';
+            titleLabel.textContent = 'Title addition (optional)';
+            const title = document.createElement('input');
+            title.id = 'pdf-title-suffix';
+            title.type = 'text';
+            title.placeholder = 'For example: Horse riding';
+            const preview = document.createElement('p');
+            preview.className = 'pdf-title-preview';
+            preview.textContent = name;
+            title.addEventListener('input', () => {
+                preview.textContent = title.value.trim() ? `${name} - ${title.value.trim()}` : name;
+            });
+            const narrativeLabel = document.createElement('label');
+            narrativeLabel.htmlFor = 'pdf-narrative';
+            narrativeLabel.textContent = 'Narrative description (optional)';
+            const narrative = document.createElement('textarea');
+            narrative.id = 'pdf-narrative';
+            narrative.rows = 6;
+            narrative.placeholder = 'Describe what was happening during this timeframe. This text will appear below the chart.';
+            const actions = document.createElement('div');
+            actions.className = 'pdf-export-actions';
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = 'Cancel';
+            cancel.addEventListener('click', () => dialog.close());
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.textContent = 'Export PDF';
+            let result = null;
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                result = { title: preview.textContent, narrative: narrative.value.trim() };
+                dialog.close();
+            });
+            dialog.addEventListener('close', () => { dialog.remove(); resolve(result); }, { once: true });
+            actions.append(cancel, submit);
+            form.append(heading, titleLabel, title, preview, narrativeLabel, narrative, actions);
+            dialog.appendChild(form);
+            document.body.appendChild(dialog);
+            dialog.showModal();
+            title.focus();
+        });
     },
 
-    exportToPdf: async function (title, dateRange, summary) {
+    exportToPdf: async function (title, dateRange, summary, narrative = '') {
         try {
             if (!window.html2canvas || !window.jspdf) throw new Error('PDF export libraries are unavailable.');
 
@@ -16,21 +66,7 @@ window.chartExport = {
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
 
-            // Page 1 contains only the main chart tile as currently displayed.
-            const screenshot = canvas.toDataURL('image/jpeg', 0.94);
-            const imageRatio = canvas.width / canvas.height;
-            const pageRatio = pageWidth / pageHeight;
-            let imageWidth, imageHeight, imageX = 0, imageY = 0;
-            if (imageRatio > pageRatio) {
-                imageWidth = pageWidth;
-                imageHeight = pageWidth / imageRatio;
-                imageY = (pageHeight - imageHeight) / 2;
-            } else {
-                imageHeight = pageHeight;
-                imageWidth = pageHeight * imageRatio;
-                imageX = (pageWidth - imageWidth) / 2;
-            }
-            pdf.addImage(screenshot, 'JPEG', imageX, imageY, imageWidth, imageHeight, undefined, 'FAST');
+            this.drawChartPage(pdf, canvas, narrative, pageWidth, pageHeight);
 
             pdf.addPage('letter', 'landscape');
             this.drawSummaryPage(pdf, summary || {}, title, dateRange, pageWidth, pageHeight);
@@ -42,6 +78,35 @@ window.chartExport = {
             console.error('PDF export failed:', error);
             const detail = error && error.message ? `\n\n${error.message}` : '';
             window.alert('The PDF could not be created.' + detail);
+        }
+    },
+
+    drawChartPage: function (pdf, canvas, narrative, pageWidth, pageHeight) {
+        const margin = 12;
+        const width = pageWidth - margin * 2;
+        const lineHeight = 5;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(11);
+        const lines = narrative.trim() ? pdf.splitTextToSize(narrative.trim(), width) : [];
+        const firstLineCount = Math.min(lines.length, 12);
+        const narrativeHeight = firstLineCount ? firstLineCount * lineHeight + 7 : 0;
+        const availableHeight = pageHeight - margin * 2 - narrativeHeight;
+        const ratio = canvas.width / canvas.height;
+        const imageWidth = Math.min(width, availableHeight * ratio);
+        const imageHeight = imageWidth / ratio;
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
+            (pageWidth - imageWidth) / 2, margin, imageWidth, imageHeight, undefined, 'FAST');
+        let offset = 0;
+        let y = margin + imageHeight + 7;
+        while (offset < lines.length) {
+            const count = Math.max(1, Math.floor((pageHeight - margin - y) / lineHeight) + 1);
+            const chunk = lines.slice(offset, offset + count);
+            chunk.forEach((line, index) => pdf.text(line, margin, y + index * lineHeight));
+            offset += chunk.length;
+            if (offset < lines.length) {
+                pdf.addPage('letter', 'landscape');
+                y = margin + lineHeight;
+            }
         }
     },
 
@@ -65,6 +130,9 @@ window.chartExport = {
 
         const legend = document.createElement('div');
         legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
+        const behaviorLegend = document.createElement('div');
+        const medicationLegend = document.createElement('div');
+        legend.append(behaviorLegend, medicationLegend);
         for (const item of tile?.querySelectorAll('.chart-legend-entry') || []) {
             const entry = document.createElement('span');
             // Inline blocks wrap between complete entries, never within names.
@@ -75,13 +143,15 @@ window.chartExport = {
                 swatch.style.display = 'inline-block';
                 swatch.style.verticalAlign = 'middle';
                 swatch.style.marginRight = '7px';
+                // Preserve horizontal gradient swatches without relying on flex.
+                for (const step of swatch.children) step.style.display = 'inline-block';
                 entry.appendChild(swatch);
             }
             const label = document.createElement('span');
             label.textContent = [...item.querySelectorAll('.mud-typography')].map(node => node.textContent.trim()).join(' ');
             label.style.cssText = 'white-space:nowrap;font-weight:600;vertical-align:middle;';
             entry.appendChild(label);
-            legend.appendChild(entry);
+            (item.dataset.legendKind === 'medication' ? medicationLegend : behaviorLegend).appendChild(entry);
         }
         stage.appendChild(legend);
 
