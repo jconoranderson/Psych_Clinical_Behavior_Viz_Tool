@@ -439,3 +439,11 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 .pdf-export-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 .pdf-export-actions button { padding: 9px 16px; border: 1px solid #9ba8b3; border-radius: 6px; cursor: pointer; background: white; }
 .pdf-export-actions button[type="submit"] { background: #5c4ee5; color: white; border-color: #5c4ee5; }
+
+/* Let hover details extend over the navigator; SVG plot clipping is unchanged. */
+#behavior-main-chart-container .apexcharts-canvas {
+    overflow: visible !important;
+}
+#behavior-main-chart-container .apexcharts-tooltip {
+    z-index: 20;
+}

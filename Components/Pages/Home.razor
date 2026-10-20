@@ -579,7 +579,7 @@
                          class="@(_selectedPeriod == AggregationPeriod.Month ? "monthly-chart-container" : "")"
                          data-first-month-index="@NavigatorFirstMonthIndex"
                          data-month-count="@(ChartBehaviorCounts.Select(item => item.Date.Date).Distinct().Count())"
-                         style="min-height:0; overflow:hidden; position:relative;">
+                         style="min-height:0; overflow:visible; position:relative; z-index:2;">
                     <ApexChart @key="ChartKey" TItem="DailyBehaviorCount"
                                @ref="_chart"
                                Options="_options"
