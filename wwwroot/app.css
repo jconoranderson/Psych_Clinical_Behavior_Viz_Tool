@@ -89,8 +89,39 @@ html, body {
 .filters-sidebar {
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 112px);
+    height: calc(100dvh - 112px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sidebar-panels {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sidebar-variables {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.hover-details-panel {
+    flex: 0 1 auto;
+    min-height: 140px;
+    max-height: 40%;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background-color: #fafafa;
+}
+
+.hover-details-panel:focus-visible {
+    outline: 2px solid #5c4ee5;
+    outline-offset: -2px;
 }
 
 .sidebar-card,
@@ -240,7 +271,7 @@ html, body {
     }
 
     .filters-sidebar {
-        max-height: 42vh;
+        height: 42dvh;
         margin-bottom: 6px;
     }
 
