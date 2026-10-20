@@ -1612,6 +1612,11 @@
             _hoveredDurations.Clear();
         }
 
+        else if (_hoveredPoint != null)
+        {
+            await UpdateHoverDetails(_hoveredPoint);
+        }
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -2861,6 +2866,10 @@
             }
         }
 
+        // Five evenly spaced intervals with integer steps for episode counts.
+        if (_yAxisMetric == YAxisMetric.Frequency)
+            globalMax = Math.Ceiling(globalMax / 5m) * 5m;
+
         var firstStackedTarget = Enumerable.Reverse(VisibleTargets).FirstOrDefault();
         var firstStackedMetric = firstStackedTarget == null
             ? OverlayMetric.None
@@ -2875,8 +2884,11 @@
             Title = new AxisTitle { Text = yAxisTitle },
             Min = 0,
             Max = globalMax,
-            ForceNiceScale = true,
-            Labels = new YAxisLabels { Formatter = @"function(val) { return Math.round(val * 100) / 100; }" },
+            ForceNiceScale = _yAxisMetric != YAxisMetric.Frequency,
+            TickAmount = _yAxisMetric == YAxisMetric.Frequency ? 5 : null,
+            Labels = new YAxisLabels { Formatter = _yAxisMetric == YAxisMetric.Frequency
+                ? @"function(val) { return Math.round(val); }"
+                : @"function(val) { return Math.round(val * 100) / 100; }" },
             DecimalsInFloat = 0
         };
         var hiddenBehaviorAxis = new YAxis { Show = false, SeriesName = firstBehaviorName ?? "Behavior" };
@@ -3471,6 +3483,12 @@
         if (item == null || string.IsNullOrEmpty(item.Target) || item.Target.Contains(" (mg)") || item.HasData == false)
             return Task.CompletedTask;
 
+        UpdateHoverDetails(item);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private Task UpdateHoverDetails(DailyBehaviorCount item)
+    {
         _hoveredPoint = item;
         _hoveredTarget = item.Target;
 
@@ -3527,10 +3545,13 @@
             .Where(x => x.Target == baseTarget && x.Date?.Date >= periodStart && x.Date?.Date <= periodEnd)
             .ToList();
 
+        var hiddenSubcategories = _variableSelector?.GetHiddenSubcategories();
+        var hidden = hiddenSubcategories != null && hiddenSubcategories.TryGetValue(baseTarget, out var selectedHidden)
+            ? selectedHidden : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allSubs = rawRecords
             .Where(x => !string.IsNullOrEmpty(x.Subcategory))
             .SelectMany(x => x.Subcategory.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Where(x => !x.Equals("Not Specified", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !x.Equals("Not Specified", StringComparison.OrdinalIgnoreCase) && !hidden.Contains(x))
             .ToList();
 
         _hoveredSubcategories = allSubs
@@ -3558,7 +3579,6 @@
             new(6, (int)rawRecords.Sum(x => x.Duration_06_Count ?? 0))
         };
 
-        InvokeAsync(StateHasChanged);
         return Task.CompletedTask;
     }
 

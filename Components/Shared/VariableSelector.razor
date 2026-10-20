@@ -50,7 +50,10 @@
                                              Dense="true"
                                              Size="MudBlazor.Size.Small"
                                              Color="MudBlazor.Color.Secondary" />
-                                <MudText Typo="Typo.caption">@subcat</MudText>
+                                <MudText Typo="Typo.caption" Style="cursor: pointer; user-select: none;"
+                                         title="Double-click to isolate this subcategory"
+                                         @onclick="@(() => OnSubcategoryVisibilityChanged(target, subcat, !IsSubcategoryVisible(target, subcat)))"
+                                         @ondblclick="@(() => IsolateSubcategory(target, subcat))">@subcat</MudText>
                             </MudStack>
                         }
                     </MudStack>
@@ -273,6 +276,16 @@
             state.HiddenSubcategories.Remove(subcat);
         else
             state.HiddenSubcategories.Add(subcat);
+        await OnStateChanged.InvokeAsync();
+    }
+
+    public async Task IsolateSubcategory(string target, string subcategory)
+    {
+        var state = GetTargetState(target);
+        state.Visible = true;
+        state.HiddenSubcategories = GetSubcategories(target)
+            .Where(candidate => !string.Equals(candidate, subcategory, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         await OnStateChanged.InvokeAsync();
     }
 

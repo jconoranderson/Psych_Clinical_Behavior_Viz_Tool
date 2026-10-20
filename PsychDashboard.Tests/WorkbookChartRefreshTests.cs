@@ -65,6 +65,58 @@ public sealed class WorkbookChartRefreshTests
         }
     }
 
+    [Fact]
+    public async Task IsolatedSubcategoryFiltersChartAndHoverDetails()
+    {
+        var selector = new VariableSelector();
+        typeof(VariableSelector).GetProperty("AvailableSubcategories")!.SetValue(selector,
+            new Dictionary<string, List<string>> { ["Original"] = ["hitting", "grabbing"] });
+        await selector.IsolateSubcategory("Original", "hitting");
+        Assert.True(selector.GetTargetState("Original").Visible);
+        Assert.Equal(new[] { "grabbing" }, selector.GetHiddenSubcategories()["Original"]);
+
+        var workbook = Workbook(2025, "Original");
+        workbook.Behaviors[0].Subcategory = "hitting, grabbing";
+        workbook.Behaviors[1].Subcategory = "grabbing";
+        var service = new PatientHistoryService(null!, new ConfigurationBuilder().Build());
+        var model = await service.GetPatientHistoryFromRecordsAsync(workbook.Behaviors, [],
+            AggregationPeriod.Month, hiddenSubcategories: selector.GetHiddenSubcategories());
+        Assert.Single(model.UnreducedBehaviorCounts);
+        Assert.Equal(1, Assert.Single(model.DailyBehaviorCounts).Count);
+
+        using var page = new Home();
+        Set(page, "_viewModel", model);
+        Set(page, "_variableSelector", selector);
+        Set(page, "_selectedPeriod", AggregationPeriod.Month);
+        await (Task)Invoke(page, "UpdateHoverDetails", model.DailyBehaviorCounts[0])!;
+        var details = Get<List<KeyValuePair<string, int>>>(page, "_hoveredSubcategories");
+        Assert.Equal("hitting", Assert.Single(details).Key);
+        Assert.Equal(1, details[0].Value);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(35)]
+    [InlineData(123)]
+    public async Task FrequencyAxisHasIntegerTickIntervals(int count)
+    {
+        using var page = new Home();
+        typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
+        var workbook = Workbook(2025, "Original");
+        workbook.Behaviors[0].Episode_Count = count;
+        Set(page, "_parsedWorkbook", workbook);
+        Set(page, "_selectedPeriod", AggregationPeriod.Month);
+        Set(page, "_yAxisMetric", YAxisMetric.Frequency);
+        await LoadDefaultWindow(page, true);
+        Invoke(page, "BuildChartOptions");
+        var options = Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options");
+        var axis = options.Yaxis.First();
+        Assert.Equal(5, axis.TickAmount);
+        Assert.True((decimal)axis.Max >= count);
+        Assert.Equal(0m, (decimal)axis.Max % 5);
+    }
+
     private static ParsedWorkbookResult Workbook(int year, string name) => new()
     {
         Behaviors = new[] { 1, 31 }.Select(day => new PatientHistoryService.BehaviorCsvRow

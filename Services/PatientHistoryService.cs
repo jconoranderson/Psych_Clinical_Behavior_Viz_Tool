@@ -200,7 +200,7 @@ namespace PsychDashboard.Services
                 };
 
                 viewModel.DailyBehaviorCounts = grouped;
-                viewModel.UnreducedBehaviorCounts = validRecords;
+                viewModel.UnreducedBehaviorCounts = filteredRecords;
             }
 
             // --- LOAD MEDICATION DATA ---
