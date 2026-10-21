@@ -3392,6 +3392,9 @@
 
     private async Task ExportToPdf()
     {
+        // Load the current exporter at use time, including in long-lived tabs.
+        await using var exporter = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/chart-export.js?v=19");
         var options = await JS.InvokeAsync<PdfExportOptions?>("chartExport.requestOptions", _chartTitle);
         if (options == null) return;
         var title = options.Title;
