@@ -257,6 +257,10 @@
                         <MudText Typo="Typo.caption" Class="toggle-label" @onclick="() => OnShowMedicationsChanged(!_showMedications)">Medication</MudText>
                     </MudStack>
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudSwitch T="bool" Value="_showScip" ValueChanged="OnShowScipChanged" Disabled="@(!HasScipData)" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" />
+                        <MudText Typo="Typo.caption" Class="toggle-label" @onclick="() => OnShowScipChanged(!_showScip)">SCIP</MudText>
+                    </MudStack>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                         <MudSwitch T="bool" Value="_showMissingData" ValueChanged="OnMissingDataChanged" Color="MudBlazor.Color.Warning" Size="MudBlazor.Size.Small" />
                         <MudText Typo="Typo.caption" Class="toggle-label" @onclick="() => OnMissingDataChanged(!_showMissingData)">Missing data</MudText>
                     </MudStack>
@@ -323,7 +327,7 @@
                 {
                     <style>
                         /* Set behavior lines to 0.7 alpha (exclude medication dasharray 2) */
-                        path.apexcharts-line:not([stroke-dasharray="2"]):not([style*="stroke-dasharray: 2"]) {
+                        path.apexcharts-line[stroke-width="2.5"]:not([stroke-dasharray="2"]):not([style*="stroke-dasharray: 2"]) {
                             stroke-opacity: 0.7 !important;
                         }
                         path.apexcharts-bar-area {
@@ -574,9 +578,24 @@
                     </MudStack>
                 }
 
+                @if (_scipSeries.Count > 0)
+                {
+                    <MudStack Row="true" Spacing="3" Justify="Justify.Center" Class="mb-2" Style="flex-wrap:wrap;">
+                        @foreach (var name in _scipSeries.Keys)
+                        {
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="chart-legend-entry" data-legend-kind="scip">
+                                <div style="width:32px;height:3px;background:@ScipColor(name);position:relative;">
+                                    <span style="position:absolute;left:13px;top:-3px;width:9px;height:9px;border-radius:50%;background:@ScipColor(name);"></span>
+                                </div>
+                                <MudText Typo="Typo.caption">SCIP: @name</MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+
                 <div style="flex-grow: 1; display: grid; grid-template-rows: minmax(260px, 1fr) 135px; min-height: 0;">
                     <div id="behavior-main-chart-container"
-                         class="@(_selectedPeriod == AggregationPeriod.Month ? "monthly-chart-container" : "")"
+                         class="@($"{(_selectedPeriod == AggregationPeriod.Month ? "monthly-chart-container" : "")} {(_scipSeries.Count > 0 ? "scip-overlay-active" : "")}")"
                          data-first-month-index="@NavigatorFirstMonthIndex"
                          data-month-count="@(ChartBehaviorCounts.Select(item => item.Date.Date).Distinct().Count())"
                          style="min-height:0; overflow:visible; position:relative; z-index:2;">
@@ -814,6 +833,16 @@
                             }
                         }
                     }
+                    @foreach (var scip in _scipSeries)
+                    {
+                        <ApexPointSeries TItem="DailyBehaviorCount"
+                                         Items="scip.Value"
+                                         Name="@($"SCIP: {scip.Key}")"
+                                         SeriesType="SeriesType.Line"
+                                         Color="@ScipColor(scip.Key)"
+                                         XValue="@(e => _selectedPeriod == AggregationPeriod.Average ? (object)(VisibleTargets.FirstOrDefault() ?? "SCIP") : GetChartXValue(e))"
+                                         YValue="@(e => e.HasData ? (decimal?)e.Count : null)" />
+                    }
                     </ApexChart>
                     @if (_selectedPeriod == AggregationPeriod.Month)
                     {
@@ -921,6 +950,25 @@
     private bool _showDuration = false;
     private bool _showMissingData = false;
     private bool _showMedications = false;
+    private bool _showScip;
+    private bool HasScipData => !_useDataWarehouse && _parsedWorkbook?.Scip.Count > 0;
+    private Dictionary<string, List<DailyBehaviorCount>> _scipSeries = new();
+    private static readonly string[] ScipColors = { "#00695C", "#D84315", "#4527A0", "#1565C0", "#AD1457", "#558B2F", "#6D4C41", "#00838F" };
+    private string ScipColor(string name)
+    {
+        var names = (_parsedWorkbook?.Scip ?? new()).Select(row => row.Name).Distinct().OrderBy(value => value).ToList();
+        return ScipColors[Math.Max(0, names.IndexOf(name)) % ScipColors.Length];
+    }
+
+    private async Task OnShowScipChanged(bool show)
+    {
+        _showScip = show && HasScipData;
+        BuildChartOptions();
+        _chart = null;
+        _chartRevision++;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private bool _showTrendLines = false;
     private OverlayMetric _overlayPriority = OverlayMetric.None;
 
@@ -2182,6 +2230,12 @@
     // --- Chart Configuration ---
     private void BuildChartOptions()
     {
+        _scipSeries = _showScip && HasScipData
+            ? _parsedWorkbook!.Scip.Select(row => row.Name).Distinct().OrderBy(name => name)
+                .ToDictionary(name => name, name => ScipAggregationService.Aggregate(
+                    _parsedWorkbook.Scip, name, _selectedPeriod, ChartBehaviorCounts,
+                    _selectedShifts, _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End))
+            : new();
         var composition = ChartComposition;
         var isStacked = composition.IsStacked;
         var yAxisTitle = isStacked
@@ -2322,8 +2376,8 @@
                         SeriesIndex = seriesIndex,
                         DataPointIndex = pointIndex,
                         Size = 4,
-                        FillColor = targetColor,
-                        StrokeColor = "#ffffff"
+                        FillColor = _scipSeries.Count > 0 ? targetColor + "66" : targetColor,
+                        StrokeColor = _scipSeries.Count > 0 ? "#ffffff66" : "#ffffff"
                     });
                 }
             }
@@ -2341,6 +2395,22 @@
             strokeWidths.Add(2.5);
             strokeCurves.Add(Curve.Stepline); // Staircase line for dose transitions
             strokeDashArrays.Add(2); // Dotted line
+        }
+
+        var scipSeriesIndex = behaviorSeriesCount + trendSeriesCount + validMedsList.Count;
+        foreach (var scip in _scipSeries)
+        {
+            strokeWidths.Add(3.2);
+            strokeCurves.Add(Curve.Straight);
+            // A single long dash renders solid and avoids Apex's zero-dash bug.
+            strokeDashArrays.Add(10000);
+            for (var pointIndex = 0; pointIndex < scip.Value.Count; pointIndex++)
+                if (scip.Value[pointIndex].HasData)
+                    behaviorMarkers.Add(new MarkersDiscrete {
+                        SeriesIndex = scipSeriesIndex, DataPointIndex = pointIndex,
+                        Size = 5, FillColor = ScipColor(scip.Key), StrokeColor = "#ffffff"
+                    });
+            scipSeriesIndex++;
         }
 
         // Prevent ArgumentNullException in ApexCharts ValueOrListConverter for empty lists
@@ -2537,6 +2607,12 @@
                         timeZone: 'UTC'
                     });
                 }
+            }
+
+            if (hoveredName.startsWith('SCIP: ')) {
+                var count = series[seriesIndex]?.[dataPointIndex];
+                return '<div style=""padding:10px 12px;""><b>' + escapeHtml(dateLabel) + '</b><br>' +
+                    escapeHtml(hoveredName) + ': <b>' + (count == null ? 'No data' : Math.round(count)) + '</b></div>';
             }
 
             var medicationNames = " + medNamesJson + @";
@@ -2750,6 +2826,7 @@
                             return val + ' (' + pct + '%)';
                         }
 
+                        if (name.startsWith('SCIP: ')) return Math.round(val);
                         var baseName = name.split(' (')[0];
                         if (medNamesJson.includes(baseName) || medNamesJson.includes(name)) {
                             var realVal = Math.pow(10, val);
@@ -2771,7 +2848,7 @@
                 // ApexCharts requires a line base renderer for a mixed
                 // line/column chart; individual behavior series still declare
                 // themselves as bars.
-                Type = (composition.ShowMedicationSeries && validMedsList.Any()) || trendSeriesCount > 0
+                Type = (composition.ShowMedicationSeries && validMedsList.Any()) || trendSeriesCount > 0 || _scipSeries.Count > 0
                     ? ApexCharts.ChartType.Line
                     : (_renderedChartState.ChartType == ChartDisplayType.Bar
                         ? ApexCharts.ChartType.Bar
@@ -2996,6 +3073,18 @@
             });
         }
 
+        if (_scipSeries.Count > 0)
+        {
+            var maxScip = _scipSeries.Values.SelectMany(points => points).Select(point => point.Count).DefaultIfEmpty().Max();
+            _options.Yaxis.Add(new YAxis {
+                SeriesName = _scipSeries.Keys.Select(name => $"SCIP: {name}").ToList(),
+                Opposite = true, Title = new AxisTitle { Text = "SCIP frequency" },
+                Min = 0, Max = Math.Max(5, (int)Math.Ceiling(maxScip * 1.1 / 5) * 5),
+                TickAmount = 5, ForceNiceScale = false, DecimalsInFloat = 0,
+                Labels = new YAxisLabels { Formatter = "function(value) { return Math.round(value); }" }
+            });
+        }
+
         // Ensure at least one axis if empty
         if (_options.Yaxis.Count == 0) _options.Yaxis.Add(behaviorAxis);
 
@@ -3078,6 +3167,8 @@
             _options.Colors = baseColors;
         }
 
+        baseColors.AddRange(_scipSeries.Keys.Select(ScipColor));
+        _options.Colors = baseColors;
         if (_options.Fill == null) _options.Fill = new Fill { Opacity = 1.0 };
 
         // Add annotations
@@ -3338,6 +3429,7 @@
                 _renderedChartState.ShowIntensity ? "Intensity" : null,
                 _renderedChartState.ShowDuration ? "Duration" : null,
                 _renderedChartState.ShowMedications ? "Medication" : null,
+                _showScip && HasScipData ? "SCIP" : null,
                 _renderedChartState.ShowTrendLines ? "Trend line" : null,
                 _showMissingData ? "Missing data" : null
             }.Where(value => value != null)),
@@ -3488,6 +3580,8 @@
     private Task OnChartHover(HoverData<DailyBehaviorCount> args)
     {
         var hoveredSeriesName = args.Series?.Name;
+        if (hoveredSeriesName?.StartsWith("SCIP: ", StringComparison.Ordinal) == true)
+            return Task.CompletedTask;
         var hoveredTarget = GetBaseTargetName(hoveredSeriesName);
         var hoveredDate = GetHoveredDate(args.DataPoint?.X);
 

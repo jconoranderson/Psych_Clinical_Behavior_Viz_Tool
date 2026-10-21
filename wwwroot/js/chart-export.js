@@ -137,7 +137,8 @@ window.chartExport = {
         legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
         const behaviorLegend = document.createElement('div');
         const medicationLegend = document.createElement('div');
-        legend.append(behaviorLegend, medicationLegend);
+        const scipLegend = document.createElement('div');
+        legend.append(behaviorLegend, medicationLegend, scipLegend);
         for (const item of tile?.querySelectorAll('.chart-legend-entry') || []) {
             const entry = document.createElement('span');
             // Inline blocks wrap between complete entries, never within names.
@@ -156,7 +157,8 @@ window.chartExport = {
             label.textContent = [...item.querySelectorAll('.mud-typography')].map(node => node.textContent.trim()).join(' ');
             label.style.cssText = 'white-space:nowrap;font-weight:600;vertical-align:middle;';
             entry.appendChild(label);
-            (item.dataset.legendKind === 'medication' ? medicationLegend : behaviorLegend).appendChild(entry);
+            (item.dataset.legendKind === 'medication' ? medicationLegend
+                : item.dataset.legendKind === 'scip' ? scipLegend : behaviorLegend).appendChild(entry);
         }
         stage.appendChild(legend);
 

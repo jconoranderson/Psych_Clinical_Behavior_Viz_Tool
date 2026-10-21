@@ -447,3 +447,8 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 #behavior-main-chart-container .apexcharts-tooltip {
     z-index: 20;
 }
+
+.scip-overlay-active path.apexcharts-bar-area { fill-opacity: .4 !important; }
+.scip-overlay-active path.apexcharts-line[stroke-width="2.5"]:not([stroke-dasharray="2"]):not([stroke-dasharray="6"]) { stroke-opacity: .4 !important; }
+.scip-overlay-active path.apexcharts-line[stroke-width="3.2"] { stroke-opacity: 1 !important; }
+.overlay-controls { flex-wrap: wrap; }

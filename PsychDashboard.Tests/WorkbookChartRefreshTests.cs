@@ -136,6 +136,41 @@ public sealed class WorkbookChartRefreshTests
         Assert.False(summary.GetProperty("Behaviors")[0].TryGetProperty("AverageIntensity", out _));
     }
 
+    [Theory]
+    [InlineData(AggregationPeriod.Month, ChartDisplayType.Bar, false)]
+    [InlineData(AggregationPeriod.Month, ChartDisplayType.Bar, true)]
+    [InlineData(AggregationPeriod.Week, ChartDisplayType.Bar, true)]
+    [InlineData(AggregationPeriod.Day, ChartDisplayType.Line, false)]
+    [InlineData(AggregationPeriod.Average, ChartDisplayType.Bar, true)]
+    public async Task ScipSeriesHaveCountAxisAndMarkersWithOtherOverlays(AggregationPeriod period, ChartDisplayType chartType, bool stacked)
+    {
+        using var page = new Home();
+        typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
+        var workbook = Workbook(2025, "Original");
+        workbook.Behaviors.ForEach(row => row.Intensity_01_Count = 1);
+        workbook.Scip = [new(new DateTime(2025, 1, 1), TimeSpan.FromHours(8), "Procedure", 3, "Test")];
+        Set(page, "_parsedWorkbook", workbook);
+        Set(page, "_selectedPeriod", period);
+        await LoadDefaultWindow(page, true);
+        Set(page, "_showScip", true);
+        var stateType = typeof(Home).GetNestedType("ChartViewState", BindingFlags.NonPublic)!;
+        Set(page, "_renderedChartState", Activator.CreateInstance(stateType, chartType, stacked, false, true, true)!);
+        Invoke(page, "BuildChartOptions");
+        var options = Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options");
+        Assert.Contains("SCIP frequency", (List<string>)options.Yaxis.Last().Title.Text);
+        Assert.Equal(0, options.Yaxis.Last().DecimalsInFloat);
+        Assert.Equal(ApexCharts.ChartType.Line, options.Chart.Type);
+        Assert.Contains(options.Markers.Discrete, marker => marker.Size == 5);
+        var points = Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries")["Procedure"];
+        Assert.Equal(3, points.Sum(point => point.Count));
+        Set(page, "_showScip", false);
+        Invoke(page, "BuildChartOptions");
+        Assert.Empty(Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries"));
+        Assert.DoesNotContain(Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options").Yaxis,
+            axis => axis.Title != null && ((List<string>)axis.Title.Text).Contains("SCIP frequency"));
+    }
+
     private static ParsedWorkbookResult Workbook(int year, string name) => new()
     {
         Behaviors = new[] { 1, 31 }.Select(day => new PatientHistoryService.BehaviorCsvRow

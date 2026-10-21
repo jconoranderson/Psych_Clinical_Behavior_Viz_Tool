@@ -16,6 +16,8 @@ public static class WorkbookMergeService
 
         return new ParsedWorkbookResult
         {
+            Scip = sources.SelectMany(source => source.Scip).Distinct()
+                .OrderBy(record => record.Date).ThenBy(record => record.Time).ToList(),
             Behaviors = sources
                 .SelectMany(source => source.Behaviors)
                 .DistinctBy(record => JsonSerializer.Serialize(record))

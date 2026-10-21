@@ -13,7 +13,8 @@ The example above shows monthly behavior rates as colored bars with medication d
 - **Workbook uploads:** Drag and drop or choose `.xlsx`, `.xlsm`, or `.xls` files. Combine workbooks to explore multiple years of history.
 - **Behavior comparisons:** Choose which behaviors to display, switch between line and bar charts, and compare frequency or rate per recorded shift.
 - **Time and shift filters:** Group observations by day, week, month, or rolling view; select shifts and adjust the date range.
-- **Optional overlays:** Show medication dose changes, intensity, duration, missing data, and trend lines.
+- **Optional overlays:** Show medication dose changes, SCIP counts, intensity, duration, missing data, and trend lines.
+- **SCIP workbook overlay:** Reads named columns CR–DI (row 1 headers; `0` or blank headers are ignored). Each SCIP procedure appears as a solid line with circular markers, summed by day, week, month, or the selected rolling range and filtered by the selected shifts. A separate frequency axis keeps SCIP counts distinct from behavior rates. Recorded zeros are retained; missing-data/LOA and unrecorded template rows are excluded. SCIP is available for uploaded workbooks.
 - **Interactive exploration:** Inspect hover details, zoom into the chart, and navigate the full history using the range selector.
 - **PDF export:** Export the current chart view for sharing or review.
 

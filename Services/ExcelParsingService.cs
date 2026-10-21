@@ -11,6 +11,7 @@ namespace PsychDashboard.Services
 {
     public class ParsedWorkbookResult
     {
+        public List<PsychDashboard.Models.ScipRecord> Scip { get; set; } = new();
         public List<PatientHistoryService.BehaviorCsvRow> Behaviors { get; set; } = new();
         public List<PsychDashboard.Models.Medication> Medications { get; set; } = new();
         public List<string> IntensityLabels { get; set; } = new();
@@ -142,7 +143,7 @@ namespace PsychDashboard.Services
                     // Find how many targets we have
                     // Block starts at col 4, each block is 18 cols wide
                     var targetBlocks = new List<(string TargetName, int StartCol)>();
-                    for (int c = 4; c < table.Columns.Count - 17; c += 18)
+                    for (int c = 4; c < Math.Min(95, table.Columns.Count - 17); c += 18)
                     {
                         var tName = row0[c]?.ToString()?.Trim();
                         if (IsWorkbookBehaviorName(tName))
@@ -155,6 +156,15 @@ namespace PsychDashboard.Services
                     int monthNum = GetMonthNum(sheetName);
                     // If month is Jan-June, it's startYear + 1
                     int currentYear = (monthNum < 7) ? startYear + 1 : startYear;
+
+                    // CR–DI inclusive (zero-based columns 95–112); row 1 names
+                    // the SCIP procedures. A zero header is an unused slot.
+                    var scipColumns = Enumerable.Range(95, 18)
+                        .Where(column => column < table.Columns.Count)
+                        .Select(column => (Column: column, Name: row0[column]?.ToString()?.Trim() ?? ""))
+                        .Where(item => !string.IsNullOrWhiteSpace(item.Name) &&
+                            !(double.TryParse(item.Name, out var headerNumber) && headerNumber == 0))
+                        .ToList();
 
                     int lastValidDayNum = -1;
 
@@ -250,9 +260,19 @@ namespace PsychDashboard.Services
                         // formulas can evaluate to zero. They are not observations.
                         // A checked "no behaviors" cell makes an all-zero shift valid;
                         // otherwise at least one target must contain a positive count.
+                        var parsedScip = scipColumns.Select(column => (
+                            column.Name, Count: TryParseDouble(row[column.Column]?.ToString()) ?? 0)).ToList();
                         var hasBehaviorOccurrence = parsedTargets.Any(item => item.Frequency > 0);
-                        if (!behaviorNone && !hasBehaviorOccurrence)
+                        var hasScipOccurrence = parsedScip.Any(item => item.Count > 0);
+                        if (!behaviorNone && !hasBehaviorOccurrence && !hasScipOccurrence)
                             continue;
+
+                        foreach (var scip in parsedScip)
+                        {
+                            results.Scip.Add(new PsychDashboard.Models.ScipRecord(
+                                date.Value, GetTimeFromShift(shiftStr), scip.Name,
+                                (int)Math.Max(0, scip.Count), personId));
+                        }
 
                         // Process each target block
                         foreach (var parsedTarget in parsedTargets)

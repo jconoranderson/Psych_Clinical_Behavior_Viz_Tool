@@ -82,6 +82,47 @@ public sealed class ExcelParsingServiceTests
         await Assert.ThrowsAnyAsync<Exception>(() => _parser.ParseWorkbookAsync(stream));
     }
 
+    [Fact]
+    public void ScipReadsEveryColumnFromCrThroughDiAndSkipsZeroHeaders()
+    {
+        using var data = Workbook();
+        var month = data.Tables["July"]!;
+        while (month.Columns.Count < 115) month.Columns.Add($"Column{month.Columns.Count}");
+        month.Rows[0][95] = "Procedure A";
+        month.Rows[0][96] = "0";
+        month.Rows[0][107] = "Procedure DD";
+        month.Rows[0][112] = "Procedure DI";
+        month.Rows[0][113] = "Outside SCIP";
+        month.Rows[3][95] = "3";
+        month.Rows[3][96] = "99";
+        month.Rows[3][107] = "2";
+        month.Rows[3][112] = "0";
+        month.Rows[3][113] = "88";
+        var result = _parser.ParseDataSet(data);
+        Assert.Single(result.Behaviors);
+        Assert.Equal(3, result.Scip.Count);
+        Assert.Equal(3, result.Scip.Single(row => row.Name == "Procedure A").Count);
+        Assert.Equal(2, result.Scip.Single(row => row.Name == "Procedure DD").Count);
+        Assert.Equal(0, result.Scip.Single(row => row.Name == "Procedure DI").Count);
+    }
+
+    [Theory]
+    [InlineData("", 4, 1)]
+    [InlineData("", 0, 0)]
+    [InlineData("No Data", 4, 0)]
+    [InlineData("LOA", 4, 0)]
+    public void ScipOnlyShiftsAreKeptButBlankAndMissingShiftsAreExcluded(string status, int count, int expected)
+    {
+        using var data = Workbook();
+        var month = data.Tables["July"]!;
+        while (month.Columns.Count < 113) month.Columns.Add($"Column{month.Columns.Count}");
+        month.Rows[0][95] = "Procedure";
+        month.Rows[3][95] = count.ToString();
+        month.Rows[3][7] = "0";
+        month.Rows[3][2] = status;
+        Assert.Equal(expected, _parser.ParseDataSet(data).Scip.Count);
+    }
+
     private static DataSet Workbook()
     {
         var data = new DataSet();
