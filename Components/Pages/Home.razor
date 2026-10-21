@@ -3458,6 +3458,13 @@
             }.Where(value => value != null)),
             TotalEpisodes = behaviorSummary.Sum(item => item.TotalEpisodes),
             Behaviors = behaviorSummary,
+            Scip = _showScip && HasScipData
+                ? AvailableScipManeuvers.Where(IsScipSelected).Select(name => new
+                {
+                    Maneuver = name,
+                    Total = ScipAggregationService.InRange(_parsedWorkbook!.Scip, start, end, _selectedShifts)
+                        .Where(row => row.Name == name).Sum(row => row.Count)
+                }).ToArray() : Array.Empty<object>(),
             Medications = medicationSummary
         };
     }
@@ -3473,6 +3480,7 @@
         public string Overlays { get; init; } = "";
         public int TotalEpisodes { get; init; }
         public object Behaviors { get; init; } = new object[0];
+        public object Scip { get; init; } = new object[0];
         public object Medications { get; init; } = new object[0];
     }
 

@@ -66,7 +66,7 @@ window.chartExport = {
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
 
-            this.drawChartPage(pdf, canvas, narrative, pageWidth, pageHeight);
+            this.drawChartPage(pdf, canvas, narrative, pageWidth, pageHeight, title);
 
             pdf.addPage('letter', 'landscape');
             this.drawSummaryPage(pdf, summary || {}, title, dateRange, pageWidth, pageHeight);
@@ -81,23 +81,26 @@ window.chartExport = {
         }
     },
 
-    drawChartPage: function (pdf, canvas, narrative, pageWidth, pageHeight) {
+    drawChartPage: function (pdf, canvas, narrative, pageWidth, pageHeight, title) {
         const margin = 12;
         const width = pageWidth - margin * 2;
+        const headerHeight = this.drawTitleBlock(pdf, title, 'Behavior chart', pageWidth);
+        const contentTop = headerHeight + 8;
+        const contentHeight = pageHeight - contentTop - margin;
         const lineHeight = 5;
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(11);
         const lines = narrative.trim() ? pdf.splitTextToSize(narrative.trim(), width) : [];
         const firstLineCount = Math.min(lines.length, 12);
         const narrativeHeight = firstLineCount ? firstLineCount * lineHeight + 7 : 0;
-        const availableHeight = pageHeight - margin * 2 - narrativeHeight;
+        const availableHeight = contentHeight - narrativeHeight;
         const ratio = canvas.width / canvas.height;
         const imageWidth = Math.min(width, availableHeight * ratio);
         const imageHeight = imageWidth / ratio;
         const firstPageLines = Math.min(lines.length,
-            Math.max(0, Math.floor((pageHeight - margin * 2 - imageHeight - 7) / lineHeight)));
+            Math.max(0, Math.floor((contentHeight - imageHeight - 7) / lineHeight)));
         const blockHeight = imageHeight + (firstPageLines ? 7 + firstPageLines * lineHeight : 0);
-        const top = Math.max(margin, (pageHeight - blockHeight) / 2);
+        const top = contentTop + Math.max(0, (contentHeight - blockHeight) / 2);
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
             (pageWidth - imageWidth) / 2, top, imageWidth, imageHeight, undefined, 'FAST');
         let offset = 0;
@@ -128,11 +131,6 @@ window.chartExport = {
         const stage = document.createElement('div');
         stage.className = 'pdf-chart-export';
         stage.style.cssText = `position:absolute;left:0;top:0;width:${bounds.width + 32}px;padding:16px;box-sizing:border-box;background:#fff;color:#263238;z-index:-1;font-family:Arial,sans-serif;`;
-        const heading = document.createElement('div');
-        heading.textContent = exportTitle || tile?.querySelector('.chart-title')?.textContent || 'Behavior overview';
-        heading.style.cssText = 'font-size:26px;font-weight:700;line-height:1.25;margin-bottom:16px;overflow-wrap:anywhere;';
-        stage.appendChild(heading);
-
         const legend = document.createElement('div');
         legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
         const behaviorLegend = document.createElement('div');
@@ -187,6 +185,22 @@ window.chartExport = {
         }
     },
 
+    drawTitleBlock: function (pdf, title, subtitle, pageWidth) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(18);
+        const lines = pdf.splitTextToSize(title || 'Behavior History', pageWidth - 24);
+        const height = 17 + lines.length * 7;
+        pdf.setFillColor(41, 54, 70);
+        pdf.rect(0, 0, pageWidth, height, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(lines, 12, 10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(11);
+        pdf.text(subtitle, 12, height - 4);
+        pdf.setTextColor(35, 43, 51);
+        return height;
+    },
+
     drawSummaryPage: function (pdf, summary, title, dateRange, pageWidth, pageHeight) {
         const margin = 12;
         const width = pageWidth - 2 * margin;
@@ -194,18 +208,8 @@ window.chartExport = {
         const number = value => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
         let y;
         const header = () => {
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(18);
-            const lines = pdf.splitTextToSize(text(title || summary.resident || 'Behavior History'), width);
-            const height = 17 + lines.length * 7;
-            pdf.setFillColor(41, 54, 70);
-            pdf.rect(0, 0, pageWidth, height, 'F');
-            pdf.setTextColor(255, 255, 255);
-            pdf.text(lines, margin, 10);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(11);
-            pdf.text('Selected timeframe summary', margin, height - 4);
-            pdf.setTextColor(35, 43, 51);
+            const height = this.drawTitleBlock(pdf, title || summary.resident,
+                'Selected timeframe summary', pageWidth);
             y = height + 9;
         };
         const ensureSpace = height => {
@@ -238,10 +242,10 @@ window.chartExport = {
         y += 4;
         section('Behavior summary');
         const widths = [width * .46, width * .18, width * .18, width * .18];
-        const drawRow = (cells, isHeader = false) => {
+        const drawRow = (cells, isHeader = false, columnWidths = widths) => {
             pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
             pdf.setFontSize(11);
-            const lines = cells.map((value, index) => pdf.splitTextToSize(text(value), widths[index] - 4));
+            const lines = cells.map((value, index) => pdf.splitTextToSize(text(value), columnWidths[index] - 4));
             const height = Math.max(...lines.map(value => value.length)) * 5 + 4;
             ensureSpace(height);
             pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
@@ -253,7 +257,7 @@ window.chartExport = {
             let x = margin;
             lines.forEach((value, index) => {
                 pdf.text(value, x + 2, y + 5);
-                x += widths[index];
+                x += columnWidths[index];
             });
             y += height;
             pdf.setDrawColor(218, 223, 229);
@@ -265,6 +269,13 @@ window.chartExport = {
         }
         if (!summary.behaviors?.length) drawRow(['No behavior data in the selected range', '', '', '']);
         y += 10;
+        if (summary.scip?.length) {
+            section('SCIP summary');
+            const scipWidths = [width * .8, width * .2];
+            drawRow(['Maneuver', 'Frequency'], true, scipWidths);
+            for (const item of summary.scip) drawRow([item.maneuver, number(item.total)], false, scipWidths);
+            y += 10;
+        }
         section('Medication Change');
         const medications = summary.medications?.length ? summary.medications : [{ medication: 'None in selected range' }];
         for (const item of medications) {

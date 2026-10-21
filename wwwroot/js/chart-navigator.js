@@ -201,9 +201,16 @@
             date = new Date(data.x);
             title.textContent = Number.isNaN(date.getTime()) ? String(data.x) : date.toLocaleDateString('en-US', {timeZone:'UTC'});
         }
-        const value = document.createElement('div');
-        value.textContent = `${series.name}: ${data.y}`;
-        tooltip.append(title, value);
+        tooltip.append(title);
+        const chart = window.Apex?._chartInstances?.find(item => item.id === 'behavior-main-chart')?.chart;
+        for (const candidate of chart?.w.config.series || [series]) {
+            if (!candidate.name.startsWith('SCIP: ')) continue;
+            const match = candidate.data.find(item => String(item.x) === String(data.x));
+            if (match?.y == null) continue;
+            const value = document.createElement('div');
+            value.textContent = `${candidate.name.slice(6)}: ${match.y}`;
+            tooltip.appendChild(value);
+        }
         document.body.appendChild(tooltip);
         container.classList.add('scip-point-hover');
         const anchor = point.getBoundingClientRect();

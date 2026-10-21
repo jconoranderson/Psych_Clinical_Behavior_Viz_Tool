@@ -117,6 +117,11 @@ public sealed class WorkbookChartRefreshTests
         typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
         var workbook = Workbook(2025, "Original");
+        workbook.Scip = [
+            new(new DateTime(2025, 1, 1), TimeSpan.FromHours(7), "Selected", 100, "Test", 106),
+            new(new DateTime(2025, 1, 31), TimeSpan.FromHours(7), "Selected", 4, "Test", 106),
+            new(new DateTime(2025, 1, 31), TimeSpan.FromHours(7), "Unselected", 50, "Test", 95)];
+        Set(page, "_showScip", true);
         workbook.Behaviors[0].Episode_Count = 100;
         workbook.Behaviors[1].Episode_Count = 7;
         Set(page, "_parsedWorkbook", workbook);
@@ -129,6 +134,9 @@ public sealed class WorkbookChartRefreshTests
         var summary = System.Text.Json.JsonSerializer.SerializeToElement(Invoke(page, "BuildPdfSummary", "Test - Review"));
         Assert.Equal("Test - Review", summary.GetProperty("Resident").GetString());
         Assert.Equal(7, summary.GetProperty("TotalEpisodes").GetInt32());
+        var scip = Assert.Single(summary.GetProperty("Scip").EnumerateArray());
+        Assert.Equal("Selected", scip.GetProperty("Maneuver").GetString());
+        Assert.Equal(4, scip.GetProperty("Total").GetInt32());
         var med = Assert.Single(summary.GetProperty("Medications").EnumerateArray());
         Assert.Equal("Jan 10, 2025", med.GetProperty("Start").GetString());
         Assert.Equal("Jan 31, 2025", med.GetProperty("End").GetString());
