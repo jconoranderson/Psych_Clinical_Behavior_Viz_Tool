@@ -94,13 +94,12 @@ window.chartExport = {
         const firstLineCount = Math.min(lines.length, 12);
         const narrativeHeight = firstLineCount ? firstLineCount * lineHeight + 7 : 0;
         const availableHeight = contentHeight - narrativeHeight;
-        const ratio = canvas.width / canvas.height;
-        const imageWidth = Math.min(width, availableHeight * ratio);
-        const imageHeight = imageWidth / ratio;
-        const firstPageLines = Math.min(lines.length,
-            Math.max(0, Math.floor((contentHeight - imageHeight - 7) / lineHeight)));
-        const blockHeight = imageHeight + (firstPageLines ? 7 + firstPageLines * lineHeight : 0);
-        const top = contentTop + Math.max(0, (contentHeight - blockHeight) / 2);
+        // Fill the printable chart area instead of preserving the browser's
+        // wide, shallow aspect ratio and leaving large blank bands on the PDF.
+        const imageWidth = width;
+        const imageHeight = availableHeight;
+        const firstPageLines = firstLineCount;
+        const top = contentTop;
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
             (pageWidth - imageWidth) / 2, top, imageWidth, imageHeight, undefined, 'FAST');
         let offset = 0;
@@ -268,7 +267,7 @@ window.chartExport = {
             drawRow([item.behavior, number(item.totalEpisodes), number(item.meanRate), number(item.recordedPeriods)]);
         }
         if (!summary.behaviors?.length) drawRow(['No behavior data in the selected range', '', '', '']);
-        y += 4;
+        y += 7;
         if (summary.scip?.length) {
             section('SCIP summary');
             // Pair maneuvers across the landscape page to keep the summary
@@ -281,7 +280,7 @@ window.chartExport = {
                 drawRow([left.maneuver, number(left.total), right?.maneuver || '',
                     right ? number(right.total) : ''], false, scipWidths);
             }
-            y += 4;
+            y += 7;
         }
         section('Medication Change');
         const medications = summary.medications?.length ? summary.medications : [{ medication: 'No dose changes in selected range' }];
