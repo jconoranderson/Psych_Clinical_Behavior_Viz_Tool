@@ -3429,18 +3429,17 @@
             };
         }).ToList();
 
-        var medicationSummary = (_viewModel?.UnreducedMedications ?? new())
-            .Where(item => start.HasValue && end.HasValue &&
-                item.Date.Date >= start.Value && item.Date.Date <= end.Value)
-            .GroupBy(item => new { item.Name, item.Unit })
-            .Select(group => new
+        var medicationSummary = MedicationChangeService.GetChanges(
+                _fullHistoryViewModel?.UnreducedMedications ?? _viewModel?.UnreducedMedications ?? new(), start, end)
+            .Select(change => new
             {
-                Medication = group.Key.Name,
-                DoseRange = $"{group.Min(item => item.Dose):0.##}–{group.Max(item => item.Dose):0.##} {group.Key.Unit}".Trim(),
-                Start = group.Min(item => item.Date).ToString("MMM d, yyyy"),
-                End = group.Max(item => item.Date).ToString("MMM d, yyyy")
-            })
-            .OrderBy(item => item.Medication).ToList();
+                change.Medication,
+                Date = change.Date.ToString("MMM d, yyyy"),
+                change.PreviousDose,
+                change.Dose,
+                change.Delta,
+                change.Unit
+            }).ToList();
 
         return new PdfSummary
         {

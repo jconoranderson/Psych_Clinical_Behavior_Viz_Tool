@@ -276,23 +276,52 @@ window.chartExport = {
             for (const item of summary.scip) drawRow([item.maneuver, number(item.total)], false, scipWidths);
             y += 10;
         }
-        section('Medication Change');
-        const medications = summary.medications?.length ? summary.medications : [{ medication: 'None in selected range' }];
-        for (const item of medications) {
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(11);
-            const line = item.doseRange ? `${item.medication}: ${item.doseRange}  (${item.start} – ${item.end})` : item.medication;
-            const lines = pdf.splitTextToSize(line, width);
-            ensureSpace(lines.length * 5 + 3);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(11);
-            pdf.text(lines, margin, y + 4);
-            y += lines.length * 5 + 3;
-        }
         ensureSpace(12);
         y += 7;
         pdf.setTextColor(100, 110, 120);
         pdf.setFontSize(10);
         pdf.text('Mean rate is the average of the displayed-period rates within the selected range.', margin, y);
+        y += 10;
+        pdf.setTextColor(35, 43, 51);
+        section('Medication Change');
+        const medications = summary.medications?.length ? summary.medications : [{ medication: 'No dose changes in selected range' }];
+        const columnGap = 10;
+        const columnWidth = (width - columnGap) / 2;
+        let column = 0;
+        let columnTop = y;
+        for (const item of medications) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(11);
+            const delta = item.delta == null ? '' : `${item.delta > 0 ? '+' : ''}${number(item.delta)} ${item.unit || ''}`.trim();
+            const line = item.date
+                ? `${item.date} — ${item.medication}: ${delta} (${number(item.previousDose)} to ${number(item.dose)} ${item.unit || ''})`
+                : item.medication;
+            const lines = pdf.splitTextToSize(line, columnWidth);
+            // Continue down the right column before allocating another page.
+            // Split very long entries too, rather than drawing outside a page.
+            for (let offset = 0; offset < lines.length;) {
+                if (y + 8 > pageHeight - 14) {
+                    if (column === 0) {
+                        column = 1;
+                        y = columnTop;
+                    } else {
+                        pdf.addPage('letter', 'landscape');
+                        header();
+                        section('Medication Change (continued)');
+                        column = 0;
+                        columnTop = y;
+                    }
+                }
+                const count = Math.max(1, Math.floor((pageHeight - 14 - y - 3) / 5));
+                const chunk = lines.slice(offset, offset + count);
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(11);
+                pdf.text(chunk, margin + column * (columnWidth + columnGap), y + 4);
+                y += chunk.length * 5;
+                offset += chunk.length;
+            }
+            y += 3;
+        }
+
     }
 };

@@ -137,9 +137,7 @@ public sealed class WorkbookChartRefreshTests
         var scip = Assert.Single(summary.GetProperty("Scip").EnumerateArray());
         Assert.Equal("Selected", scip.GetProperty("Maneuver").GetString());
         Assert.Equal(4, scip.GetProperty("Total").GetInt32());
-        var med = Assert.Single(summary.GetProperty("Medications").EnumerateArray());
-        Assert.Equal("Jan 10, 2025", med.GetProperty("Start").GetString());
-        Assert.Equal("Jan 31, 2025", med.GetProperty("End").GetString());
+        Assert.Empty(summary.GetProperty("Medications").EnumerateArray());
         Assert.False(summary.TryGetProperty("MissingData", out _));
         Assert.False(summary.GetProperty("Behaviors")[0].TryGetProperty("AverageIntensity", out _));
     }
