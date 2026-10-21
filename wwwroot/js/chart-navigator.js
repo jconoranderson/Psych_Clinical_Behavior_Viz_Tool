@@ -184,11 +184,14 @@
     }
 
     function showScipPoint(point, series, data) {
-        hideScipPoint();
         if (data?.y == null) return;
+        const existing = document.getElementById('scip-point-tooltip');
+        if (existing?.dataset.period === String(data.x)) return;
+        hideScipPoint();
         const container = document.getElementById('behavior-main-chart-container');
         const tooltip = document.createElement('div');
         tooltip.id = 'scip-point-tooltip';
+        tooltip.dataset.period = String(data.x);
         tooltip.className = 'medication-change-tooltip';
         tooltip.setAttribute('role', 'tooltip');
         const title = document.createElement('strong');
@@ -203,12 +206,20 @@
         }
         tooltip.append(title);
         const chart = window.Apex?._chartInstances?.find(item => item.id === 'behavior-main-chart')?.chart;
-        for (const candidate of chart?.w.config.series || [series]) {
-            if (!candidate.name.startsWith('SCIP: ')) continue;
-            const match = candidate.data.find(item => String(item.x) === String(data.x));
-            if (match?.y == null) continue;
+        const rows = (chart?.w.config.series || [series])
+            .filter(candidate => candidate.name.startsWith('SCIP: '))
+            .map(candidate => ({name: candidate.name.slice(6),
+                value: candidate.data.find(item => String(item.x) === String(data.x))?.y}))
+            .filter(row => row.value != null)
+            .sort((a, b) => Number(b.value) - Number(a.value) || a.name.localeCompare(b.name));
+        for (const row of rows) {
             const value = document.createElement('div');
-            value.textContent = `${candidate.name.slice(6)}: ${match.y}`;
+            value.className = 'scip-tooltip-row';
+            const label = document.createElement('span');
+            label.textContent = row.name;
+            const count = document.createElement('strong');
+            count.textContent = row.value;
+            value.append(label, count);
             tooltip.appendChild(value);
         }
         document.body.appendChild(tooltip);
@@ -276,6 +287,7 @@
                     const series = chart?.w.config.series[seriesIndex];
                     if (series?.name.startsWith('SCIP: ')) showScipPoint(point, series, series.data[pointIndex]);
                     if (series && !series.name.startsWith('SCIP: ') && !series.name.endsWith(' (mg)')) {
+                        hideScipPoint();
                         const data = series.data[pointIndex];
                         if (data?.x != null) dashboardReference.invokeMethodAsync('OnBehaviorPointHover', series.name, data.x);
                     }
@@ -287,11 +299,15 @@
                 showMedicationChange(arrow, change);
             });
             document.addEventListener("mouseout", event => {
-                if (event.target.closest?.('.apexcharts-marker')) hideScipPoint();
+                const container = document.getElementById('behavior-main-chart-container');
+                // Apex replaces/enlarges marker paths while hovering. A path's
+                // mouseout is not a chart exit and must not tear down our list.
+                if (container?.contains(event.target) && !container.contains(event.relatedTarget)) hideScipPoint();
                 const arrow = medicationArrow(event.target);
                 if (arrow && !arrow.contains(event.relatedTarget)) hideMedicationChange();
             });
             document.addEventListener("click", function (event) {
+                hideScipPoint();
                 hideMedicationChange();
                 const details = document.querySelector(".hover-details-panel");
                 if (details && !details.contains(event.target) && dashboardReference) {

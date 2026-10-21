@@ -455,3 +455,8 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 .overlay-controls { flex-wrap: wrap; }
 
 #behavior-main-chart-container.scip-point-hover .apexcharts-tooltip { visibility: hidden !important; }
+
+#scip-point-tooltip { font-size: 15px; line-height: 1.5; padding: 14px 16px; min-width: 220px; }
+#scip-point-tooltip > strong { display: block; font-size: 16px; margin-bottom: 8px; }
+.scip-tooltip-row { display: flex; justify-content: space-between; gap: 24px; padding: 4px 0; }
+.scip-tooltip-row + .scip-tooltip-row { border-top: 1px solid #edf0f3; }

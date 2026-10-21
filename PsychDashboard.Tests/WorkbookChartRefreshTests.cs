@@ -170,6 +170,9 @@ public sealed class WorkbookChartRefreshTests
         Assert.Equal(0, options.Yaxis.Last().DecimalsInFloat);
         Assert.Equal(ApexCharts.ChartType.Line, options.Chart.Type);
         Assert.Contains(options.Markers.Discrete, marker => marker.Size == 5);
+        var scipIndex = options.Markers.Discrete.First(marker => marker.Size == 5).SeriesIndex;
+        Assert.NotNull(scipIndex);
+        Assert.DoesNotContain((double)scipIndex.GetValueOrDefault(), options.Tooltip.EnabledOnSeries);
         var points = Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries")["Procedure"];
         Assert.Equal(3, points.Sum(point => point.Count));
         Set(page, "_showScip", false);

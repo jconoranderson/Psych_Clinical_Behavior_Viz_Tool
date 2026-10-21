@@ -2812,6 +2812,9 @@
                 },
             Tooltip = new Tooltip
             {
+                // SCIP uses the shared period list; never render Apex's competing tooltip.
+                Enabled = behaviorSeriesCount + trendSeriesCount + validMedsList.Count > 0,
+                EnabledOnSeries = Enumerable.Range(0, behaviorSeriesCount + trendSeriesCount + validMedsList.Count).Select(index => (double)index).ToList(),
                 // Bar charts should respond only when the pointer is over an
                 // actual bar. Shared nearest-X behavior can select the next
                 // month while the pointer is still beside the previous bar.
