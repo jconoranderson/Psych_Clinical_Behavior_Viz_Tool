@@ -85,7 +85,7 @@ window.chartExport = {
         const margin = 6;
         const width = pageWidth - margin * 2;
         const headerHeight = this.drawTitleBlock(pdf, title, 'Behavior chart', pageWidth);
-        const contentTop = headerHeight + 4;
+        const contentTop = headerHeight + margin;
         const contentHeight = pageHeight - contentTop - margin;
         const lineHeight = 5;
         pdf.setFont('helvetica', 'normal');
@@ -101,7 +101,9 @@ window.chartExport = {
         const imageHeight = canvas.height * scale;
         const firstPageLines = Math.min(lines.length,
             Math.max(0, Math.floor((contentHeight - imageHeight - 7) / lineHeight)));
-        const top = contentTop;
+        // Center the chart and its narrative as one block in the white area.
+        const blockHeight = imageHeight + (firstPageLines ? 7 + firstPageLines * lineHeight : 0);
+        const top = contentTop + Math.max(0, (contentHeight - blockHeight) / 2);
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
             (pageWidth - imageWidth) / 2, top, imageWidth, imageHeight, undefined, 'FAST');
         let offset = 0;
