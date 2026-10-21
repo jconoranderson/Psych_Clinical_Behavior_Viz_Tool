@@ -210,7 +210,7 @@ window.chartExport = {
         const header = () => {
             const height = this.drawTitleBlock(pdf, title || summary.resident,
                 'Selected timeframe summary', pageWidth);
-            y = height + 9;
+            y = height + 6;
         };
         const ensureSpace = height => {
             if (y + height > pageHeight - 14) {
@@ -219,11 +219,11 @@ window.chartExport = {
             }
         };
         const section = label => {
-            ensureSpace(18);
+            ensureSpace(12);
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(14);
+            pdf.setFontSize(12);
             pdf.text(label, margin, y);
-            y += 6;
+            y += 5;
         };
         header();
         const overview = [
@@ -237,16 +237,16 @@ window.chartExport = {
             pdf.text(label, margin, y);
             pdf.setFont('helvetica', 'normal');
             pdf.text(text(value), margin + 40, y);
-            y += 7;
+            y += 5.5;
         });
-        y += 4;
+        y += 2;
         section('Behavior summary');
         const widths = [width * .46, width * .18, width * .18, width * .18];
         const drawRow = (cells, isHeader = false, columnWidths = widths) => {
             pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
             pdf.setFontSize(11);
             const lines = cells.map((value, index) => pdf.splitTextToSize(text(value), columnWidths[index] - 4));
-            const height = Math.max(...lines.map(value => value.length)) * 5 + 4;
+            const height = Math.max(...lines.map(value => value.length)) * 4.5 + 2;
             ensureSpace(height);
             pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
             pdf.setFontSize(11);
@@ -256,7 +256,7 @@ window.chartExport = {
             }
             let x = margin;
             lines.forEach((value, index) => {
-                pdf.text(value, x + 2, y + 5);
+                pdf.text(value, x + 2, y + 4.5);
                 x += columnWidths[index];
             });
             y += height;
@@ -268,20 +268,27 @@ window.chartExport = {
             drawRow([item.behavior, number(item.totalEpisodes), number(item.meanRate), number(item.recordedPeriods)]);
         }
         if (!summary.behaviors?.length) drawRow(['No behavior data in the selected range', '', '', '']);
-        y += 10;
+        y += 4;
         if (summary.scip?.length) {
             section('SCIP summary');
-            const scipWidths = [width * .8, width * .2];
-            drawRow(['Maneuver', 'Frequency'], true, scipWidths);
-            for (const item of summary.scip) drawRow([item.maneuver, number(item.total)], false, scipWidths);
-            y += 10;
+            // Pair maneuvers across the landscape page to keep the summary
+            // compact without shrinking the readable body text.
+            const scipWidths = [width * .38, width * .12, width * .38, width * .12];
+            drawRow(['Maneuver', 'Count', 'Maneuver', 'Count'], true, scipWidths);
+            for (let index = 0; index < summary.scip.length; index += 2) {
+                const left = summary.scip[index];
+                const right = summary.scip[index + 1];
+                drawRow([left.maneuver, number(left.total), right?.maneuver || '',
+                    right ? number(right.total) : ''], false, scipWidths);
+            }
+            y += 4;
         }
-        ensureSpace(12);
-        y += 7;
+        ensureSpace(9);
+        y += 2;
         pdf.setTextColor(100, 110, 120);
         pdf.setFontSize(10);
         pdf.text('Mean rate is the average of the displayed-period rates within the selected range.', margin, y);
-        y += 10;
+        y += 4;
         pdf.setTextColor(35, 43, 51);
         section('Medication Change');
         const medications = summary.medications?.length ? summary.medications : [{ medication: 'No dose changes in selected range' }];
@@ -294,13 +301,13 @@ window.chartExport = {
             pdf.setFontSize(11);
             const delta = item.delta == null ? '' : `${item.delta > 0 ? '+' : ''}${number(item.delta)} ${item.unit || ''}`.trim();
             const line = item.date
-                ? `${item.date} — ${item.medication}: ${delta} (${number(item.previousDose)} to ${number(item.dose)} ${item.unit || ''})`
+                ? `${item.date} — ${item.medication}: ${delta}`
                 : item.medication;
             const lines = pdf.splitTextToSize(line, columnWidth);
             // Continue down the right column before allocating another page.
             // Split very long entries too, rather than drawing outside a page.
             for (let offset = 0; offset < lines.length;) {
-                if (y + 8 > pageHeight - 14) {
+                if (y + 6 > pageHeight - 12) {
                     if (column === 0) {
                         column = 1;
                         y = columnTop;
@@ -312,15 +319,15 @@ window.chartExport = {
                         columnTop = y;
                     }
                 }
-                const count = Math.max(1, Math.floor((pageHeight - 14 - y - 3) / 5));
+                const count = Math.max(1, Math.floor((pageHeight - 12 - y - 1.5) / 4.5));
                 const chunk = lines.slice(offset, offset + count);
                 pdf.setFont('helvetica', 'normal');
                 pdf.setFontSize(11);
                 pdf.text(chunk, margin + column * (columnWidth + columnGap), y + 4);
-                y += chunk.length * 5;
+                y += chunk.length * 4.5;
                 offset += chunk.length;
             }
-            y += 3;
+            y += 1.5;
         }
 
     }
