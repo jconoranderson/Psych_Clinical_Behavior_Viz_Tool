@@ -87,10 +87,12 @@ window.chartExport = {
         const headerHeight = this.drawTitleBlock(pdf, title, 'Behavior chart', pageWidth);
         const contentTop = headerHeight + margin;
         const contentHeight = pageHeight - contentTop - margin;
+        const narrativeMargin = 16;
+        const narrativeWidth = pageWidth - narrativeMargin * 2;
         const lineHeight = 5;
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(11);
-        const lines = narrative.trim() ? pdf.splitTextToSize(narrative.trim(), width) : [];
+        const lines = narrative.trim() ? pdf.splitTextToSize(narrative.trim(), narrativeWidth) : [];
         const firstLineCount = Math.min(lines.length, 12);
         const narrativeHeight = firstLineCount ? firstLineCount * lineHeight + 7 : 0;
         const availableHeight = contentHeight - narrativeHeight;
@@ -111,7 +113,7 @@ window.chartExport = {
         let count = firstPageLines;
         while (offset < lines.length) {
             const chunk = lines.slice(offset, offset + count);
-            chunk.forEach((line, index) => pdf.text(line, margin, y + index * lineHeight));
+            chunk.forEach((line, index) => pdf.text(line, narrativeMargin, y + index * lineHeight));
             offset += chunk.length;
             if (offset < lines.length) {
                 pdf.addPage('letter', 'landscape');
