@@ -82,10 +82,10 @@ window.chartExport = {
     },
 
     drawChartPage: function (pdf, canvas, narrative, pageWidth, pageHeight, title) {
-        const margin = 12;
+        const margin = 6;
         const width = pageWidth - margin * 2;
         const headerHeight = this.drawTitleBlock(pdf, title, 'Behavior chart', pageWidth);
-        const contentTop = headerHeight + 8;
+        const contentTop = headerHeight + 4;
         const contentHeight = pageHeight - contentTop - margin;
         const lineHeight = 5;
         pdf.setFont('helvetica', 'normal');
@@ -94,11 +94,13 @@ window.chartExport = {
         const firstLineCount = Math.min(lines.length, 12);
         const narrativeHeight = firstLineCount ? firstLineCount * lineHeight + 7 : 0;
         const availableHeight = contentHeight - narrativeHeight;
-        // Fill the printable chart area instead of preserving the browser's
-        // wide, shallow aspect ratio and leaving large blank bands on the PDF.
-        const imageWidth = width;
-        const imageHeight = availableHeight;
-        const firstPageLines = firstLineCount;
+        // One uniform scale preserves the chart, text and marker proportions.
+        // Fit to both page dimensions; never stretch or crop the chart.
+        const scale = Math.min(width / canvas.width, availableHeight / canvas.height);
+        const imageWidth = canvas.width * scale;
+        const imageHeight = canvas.height * scale;
+        const firstPageLines = Math.min(lines.length,
+            Math.max(0, Math.floor((contentHeight - imageHeight - 7) / lineHeight)));
         const top = contentTop;
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG',
             (pageWidth - imageWidth) / 2, top, imageWidth, imageHeight, undefined, 'FAST');
@@ -129,7 +131,7 @@ window.chartExport = {
         // controls when the capture renderer lays out the page differently.
         const stage = document.createElement('div');
         stage.className = 'pdf-chart-export';
-        stage.style.cssText = `position:absolute;left:0;top:0;width:${bounds.width + 32}px;padding:16px;box-sizing:border-box;background:#fff;color:#263238;z-index:-1;font-family:Arial,sans-serif;`;
+        stage.style.cssText = `position:absolute;left:0;top:0;width:${bounds.width + 8}px;padding:4px;box-sizing:border-box;background:#fff;color:#263238;z-index:-1;font-family:Arial,sans-serif;`;
         const legend = document.createElement('div');
         legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
         const behaviorLegend = document.createElement('div');
