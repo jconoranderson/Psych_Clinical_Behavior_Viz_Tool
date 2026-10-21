@@ -149,7 +149,7 @@ public sealed class WorkbookChartRefreshTests
             .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
         var workbook = Workbook(2025, "Original");
         workbook.Behaviors.ForEach(row => row.Intensity_01_Count = 1);
-        workbook.Scip = [new(new DateTime(2025, 1, 1), TimeSpan.FromHours(8), "Procedure", 3, "Test")];
+        workbook.Scip = [new(new DateTime(2025, 1, 1), TimeSpan.FromHours(8), "Procedure", 3, "Test", 106)];
         Set(page, "_parsedWorkbook", workbook);
         Set(page, "_selectedPeriod", period);
         await LoadDefaultWindow(page, true);
@@ -169,6 +169,32 @@ public sealed class WorkbookChartRefreshTests
         Assert.Empty(Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries"));
         Assert.DoesNotContain(Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options").Yaxis,
             axis => axis.Title != null && ((List<string>)axis.Title.Text).Contains("SCIP frequency"));
+    }
+
+    [Fact]
+    public async Task ScipDefaultsToRestrictiveColumnsAndHonorsSelectionOverrides()
+    {
+        var page = new Home();
+        typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
+        var workbook = Workbook(2025, "Original");
+        workbook.Scip = Enumerable.Range(95, 18).Select(column =>
+            new ScipRecord(new DateTime(2025, 1, 1), TimeSpan.FromHours(8),
+                $"Maneuver {column}", 2, "Test", column)).ToList();
+        Set(page, "_parsedWorkbook", workbook);
+        await LoadDefaultWindow(page, true);
+        Set(page, "_showScip", true);
+        Invoke(page, "BuildChartOptions");
+        var series = Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries");
+        Assert.Equal(7, series.Count);
+        Assert.All(Enumerable.Range(106, 7), column => Assert.Contains($"Maneuver {column}", series.Keys));
+        var selection = Get<Dictionary<string, bool>>(page, "_scipSelection");
+        selection["Maneuver 106"] = false;
+        selection["Maneuver 95"] = true;
+        Invoke(page, "BuildChartOptions");
+        series = Get<Dictionary<string, List<DailyBehaviorCount>>>(page, "_scipSeries");
+        Assert.DoesNotContain("Maneuver 106", series.Keys);
+        Assert.Contains("Maneuver 95", series.Keys);
     }
 
     private static ParsedWorkbookResult Workbook(int year, string name) => new()

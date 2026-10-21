@@ -16,7 +16,9 @@ public static class WorkbookMergeService
 
         return new ParsedWorkbookResult
         {
-            Scip = sources.SelectMany(source => source.Scip).Distinct()
+            Scip = sources.SelectMany(source => source.Scip)
+                .OrderByDescending(record => record.SourceColumn is >= 106 and <= 112)
+                .DistinctBy(record => (record.Date, record.Time, record.Name, record.Count, record.PersonId))
                 .OrderBy(record => record.Date).ThenBy(record => record.Time).ToList(),
             Behaviors = sources
                 .SelectMany(source => source.Behaviors)

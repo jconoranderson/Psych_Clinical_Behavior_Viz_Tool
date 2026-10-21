@@ -84,6 +84,11 @@
                                       OverlayMetricsDisabled="@(_chartType == ChartDisplayType.Line)"
                                       AvailableMedications="_viewModel.AvailableMedications"
                                       ShowMedications="_showMedications"
+                                      ScipManeuvers="AvailableScipManeuvers"
+                                      ShowScip="_showScip"
+                                      ScipSelected="IsScipSelected"
+                                      ScipColor="ScipColor"
+                                      ScipToggled="ToggleScipManeuver"
                                       ShowMedicationsChanged="OnShowMedicationsChanged"
                                       OnStateChanged="OnVariableStateChanged" />
                 </div>
@@ -950,6 +955,21 @@
     private bool _showDuration = false;
     private bool _showMissingData = false;
     private bool _showMedications = false;
+    private readonly Dictionary<string, bool> _scipSelection = new();
+    private List<string> AvailableScipManeuvers => HasScipData
+        ? _parsedWorkbook!.Scip.GroupBy(row => row.Name)
+            .OrderByDescending(group => group.Any(IsRestrictiveScip))
+            .ThenBy(group => group.Min(row => row.SourceColumn))
+            .ThenBy(group => group.Key).Select(group => group.Key).ToList()
+        : new();
+    private static bool IsRestrictiveScip(ScipRecord row) => row.SourceColumn is >= 106 and <= 112;
+    private bool IsScipSelected(string name) => _scipSelection.TryGetValue(name, out var selected)
+        ? selected : _parsedWorkbook!.Scip.Any(row => row.Name == name && IsRestrictiveScip(row));
+    private async Task ToggleScipManeuver(string name)
+    {
+        _scipSelection[name] = !IsScipSelected(name);
+        await OnShowScipChanged(_showScip);
+    }
     private bool _showScip;
     private bool HasScipData => !_useDataWarehouse && _parsedWorkbook?.Scip.Count > 0;
     private Dictionary<string, List<DailyBehaviorCount>> _scipSeries = new();
@@ -1992,6 +2012,7 @@
     {
         ClearChartZoomBaseline();
         _parsedWorkbook = null;
+        _scipSelection.Clear();
         _loadedWorkbookSignatures.Clear();
         _uploadMessage = "";
         _selectedResident = null;
@@ -2231,9 +2252,9 @@
     private void BuildChartOptions()
     {
         _scipSeries = _showScip && HasScipData
-            ? _parsedWorkbook!.Scip.Select(row => row.Name).Distinct().OrderBy(name => name)
+            ? AvailableScipManeuvers.Where(IsScipSelected)
                 .ToDictionary(name => name, name => ScipAggregationService.Aggregate(
-                    _parsedWorkbook.Scip, name, _selectedPeriod, ChartBehaviorCounts,
+                    _parsedWorkbook!.Scip, name, _selectedPeriod, ChartBehaviorCounts,
                     _selectedShifts, _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End))
             : new();
         var composition = ChartComposition;

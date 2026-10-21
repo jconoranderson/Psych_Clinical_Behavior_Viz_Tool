@@ -68,7 +68,7 @@
         const gridBounds = grid.getBoundingClientRect();
         const containerBounds = container.getBoundingClientRect();
         const fallbackStep = gridBounds.width / axisSpan;
-        let labelOrigin = gridBounds.left - containerBounds.left + fallbackStep / 2;
+        let labelOrigin = gridBounds.left - containerBounds.left + (0.5 - firstVisible) * fallbackStep;
         let labelStep = fallbackStep;
 
         // Apex offsets numeric column bars within the plot area. The grid's
@@ -101,6 +101,22 @@
             }
         } else if (anchors.length === 1) {
             labelOrigin = anchors[0].x - anchors[0].index * labelStep;
+        }
+
+        // Numeric mixed charts place lines at the bin coordinate but offset
+        // grouped columns. Match SCIP to the same fitted month centers used
+        // by the labels. Reset before measuring so repeated redraws cannot drift.
+        for (const series of container.querySelectorAll('.apexcharts-line-series .apexcharts-series')) {
+            if (!series.getAttribute('seriesName')?.startsWith('SCIP')) continue;
+            series.removeAttribute('transform');
+            const marker = series.querySelector('.apexcharts-marker[j]');
+            if (!marker || !anchors.length) continue;
+            const index = Number(marker.getAttribute('j'));
+            const bounds = marker.getBoundingClientRect();
+            const currentX = bounds.left + bounds.width / 2 - containerBounds.left;
+            const delta = labelOrigin + index * labelStep - currentX;
+            const scale = series.getScreenCTM()?.a || 1;
+            series.setAttribute('transform', `translate(${delta / scale}, 0)`);
         }
 
         layer.replaceChildren();
@@ -198,7 +214,13 @@
         updateMonthlyNavigatorWindow();
         if (!monthlyAxisResizeInstalled) {
             monthlyAxisResizeInstalled = true;
-            window.addEventListener("resize", () => { hideMedicationChange(); updateMonthlyAxisLabels(); });
+            let monthlyResizeTimer;
+            window.addEventListener("resize", () => {
+                hideMedicationChange();
+                clearTimeout(monthlyResizeTimer);
+                // Apex debounces its resize redraw; align after the new SVG exists.
+                monthlyResizeTimer = setTimeout(() => updateMonthlyAxisLabels(), 300);
+            });
             window.addEventListener("scroll", hideMedicationChange, true);
         }
 

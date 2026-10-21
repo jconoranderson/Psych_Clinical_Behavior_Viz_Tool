@@ -101,6 +101,9 @@ public sealed class ExcelParsingServiceTests
         var result = _parser.ParseDataSet(data);
         Assert.Single(result.Behaviors);
         Assert.Equal(3, result.Scip.Count);
+        Assert.Equal(95, result.Scip.Single(row => row.Name == "Procedure A").SourceColumn);
+        Assert.Equal(107, result.Scip.Single(row => row.Name == "Procedure DD").SourceColumn);
+        Assert.Equal(112, result.Scip.Single(row => row.Name == "Procedure DI").SourceColumn);
         Assert.Equal(3, result.Scip.Single(row => row.Name == "Procedure A").Count);
         Assert.Equal(2, result.Scip.Single(row => row.Name == "Procedure DD").Count);
         Assert.Equal(0, result.Scip.Single(row => row.Name == "Procedure DI").Count);

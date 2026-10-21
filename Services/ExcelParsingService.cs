@@ -261,7 +261,7 @@ namespace PsychDashboard.Services
                         // A checked "no behaviors" cell makes an all-zero shift valid;
                         // otherwise at least one target must contain a positive count.
                         var parsedScip = scipColumns.Select(column => (
-                            column.Name, Count: TryParseDouble(row[column.Column]?.ToString()) ?? 0)).ToList();
+                            column.Name, column.Column, Count: TryParseDouble(row[column.Column]?.ToString()) ?? 0)).ToList();
                         var hasBehaviorOccurrence = parsedTargets.Any(item => item.Frequency > 0);
                         var hasScipOccurrence = parsedScip.Any(item => item.Count > 0);
                         if (!behaviorNone && !hasBehaviorOccurrence && !hasScipOccurrence)
@@ -271,7 +271,7 @@ namespace PsychDashboard.Services
                         {
                             results.Scip.Add(new PsychDashboard.Models.ScipRecord(
                                 date.Value, GetTimeFromShift(shiftStr), scip.Name,
-                                (int)Math.Max(0, scip.Count), personId));
+                                (int)Math.Max(0, scip.Count), personId, scip.Column));
                         }
 
                         // Process each target block
