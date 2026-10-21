@@ -5,6 +5,13 @@ namespace PsychDashboard.Services;
 
 public static class ScipAggregationService
 {
+    public static bool HasPositiveCount(IEnumerable<ScipRecord> records, string name,
+        DateTime? start, DateTime? end, IReadOnlyCollection<string>? shifts) =>
+        records.Any(row => row.Name == name && row.Count > 0
+            && (!start.HasValue || row.Date.Date >= start.Value.Date)
+            && (!end.HasValue || row.Date.Date <= end.Value.Date)
+            && (shifts == null || shifts.Contains(Shift(row.Time))));
+
     // Use the behavior chart's actual period boundaries, including its anchored
     // seven-day weeks. SCIP remains a count even when behavior is shown as rate.
     public static List<DailyBehaviorCount> Aggregate(

@@ -445,6 +445,7 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
     overflow: visible !important;
 }
 #behavior-main-chart-container .apexcharts-tooltip {
+    pointer-events: none;
     z-index: 20;
 }
 
@@ -452,3 +453,5 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 .scip-overlay-active path.apexcharts-line[stroke-width="2.5"]:not([stroke-dasharray="2"]):not([stroke-dasharray="6"]) { stroke-opacity: .4 !important; }
 .scip-overlay-active path.apexcharts-line[stroke-width="3.2"] { stroke-opacity: 1 !important; }
 .overlay-controls { flex-wrap: wrap; }
+
+#behavior-main-chart-container.scip-point-hover .apexcharts-tooltip { visibility: hidden !important; }

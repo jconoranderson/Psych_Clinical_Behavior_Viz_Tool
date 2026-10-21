@@ -609,7 +609,7 @@
                                Options="_options"
                                Height="@("100%")"
                                OnZoomed="OnChartZoomed"
-                               OnDataPointEnter="OnChartHover">
+>
 
                     @if (IsOverlayStackedMode)
                     {
@@ -964,7 +964,9 @@
         : new();
     private static bool IsRestrictiveScip(ScipRecord row) => row.SourceColumn is >= 106 and <= 112;
     private bool IsScipSelected(string name) => _scipSelection.TryGetValue(name, out var selected)
-        ? selected : _parsedWorkbook!.Scip.Any(row => row.Name == name && IsRestrictiveScip(row));
+        ? selected : _parsedWorkbook!.Scip.Any(row => row.Name == name && IsRestrictiveScip(row))
+            && ScipAggregationService.HasPositiveCount(_parsedWorkbook.Scip, name,
+                _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End, _selectedShifts);
     private async Task ToggleScipManeuver(string name)
     {
         _scipSelection[name] = !IsScipSelected(name);
@@ -3598,29 +3600,18 @@
         return InvokeAsync(StateHasChanged);
     }
 
-    private Task OnChartHover(HoverData<DailyBehaviorCount> args)
+    [JSInvokable]
+    public Task OnBehaviorPointHover(string seriesName, System.Text.Json.JsonElement x)
     {
-        var hoveredSeriesName = args.Series?.Name;
-        if (hoveredSeriesName?.StartsWith("SCIP: ", StringComparison.Ordinal) == true)
+        if (seriesName.StartsWith("SCIP: ", StringComparison.Ordinal)) return Task.CompletedTask;
+        var target = GetBaseTargetName(seriesName);
+        DateTime? date = _selectedPeriod == AggregationPeriod.Month && x.TryGetDouble(out var month)
+            ? new DateTime(NavigatorFirstMonthIndex / 12, NavigatorFirstMonthIndex % 12 + 1, 1).AddMonths((int)month)
+            : GetHoveredDate(x);
+        var item = FilteredBehaviorCounts.FirstOrDefault(point => point.Target == target && point.HasData
+            && (_selectedPeriod == AggregationPeriod.Average || point.Date.Date == date?.Date));
+        if (item == null || (_hoveredPoint?.Date == item.Date && _hoveredTarget == item.Target))
             return Task.CompletedTask;
-        var hoveredTarget = GetBaseTargetName(hoveredSeriesName);
-        var hoveredDate = GetHoveredDate(args.DataPoint?.X);
-
-        // Stacked intensity/duration series are sparse because empty buckets are
-        // rendered as null. Resolve the model from the hovered X value rather than
-        // relying on DataPoint.Items, whose index can drift across sparse series.
-        var item = hoveredDate.HasValue && !string.IsNullOrEmpty(hoveredTarget)
-            ? FilteredBehaviorCounts.FirstOrDefault(x =>
-                x.Target == hoveredTarget && x.Date.Date == hoveredDate.Value.Date)
-            : null;
-
-        // Category-based charts do not expose a date-valued X coordinate.
-        item ??= args.DataPoint?.Items?.FirstOrDefault(x =>
-            x.Target == hoveredTarget && x.HasData);
-
-        if (item == null || string.IsNullOrEmpty(item.Target) || item.Target.Contains(" (mg)") || item.HasData == false)
-            return Task.CompletedTask;
-
         UpdateHoverDetails(item);
         return InvokeAsync(StateHasChanged);
     }

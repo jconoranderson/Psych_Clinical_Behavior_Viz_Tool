@@ -88,7 +88,19 @@
                     visible: Number.isInteger(index) && bounds.width > 0 && bounds.height > 1 };
             })
             .filter(point => point.visible));
-        const anchors = barPoints.sort((a, b) => b.length - a.length)[0] || [];
+        // A grouped bar's center is NOT the month's center: each behavior
+        // occupies a slot on either side of the actual numeric X coordinate.
+        // Use the unmodified SCIP coordinates when present. Moving SVG groups
+        // breaks Apex's hit testing and gets undone on its next redraw.
+        const scipPoints = [...container.querySelectorAll(
+            '.apexcharts-line-series .apexcharts-series[seriesName^="SCIP"]')]
+            .map(series => [...series.querySelectorAll('.apexcharts-marker[j]')].map(marker => {
+                const bounds = marker.getBoundingClientRect();
+                return { index: Number(marker.getAttribute('j')),
+                    x: bounds.left + bounds.width / 2 - containerBounds.left };
+            }));
+        const anchors = scipPoints.sort((a, b) => b.length - a.length)[0]?.length
+            ? scipPoints[0] : barPoints.sort((a, b) => b.length - a.length)[0] || [];
         if (anchors.length >= 2) {
             const meanIndex = anchors.reduce((sum, point) => sum + point.index, 0) / anchors.length;
             const meanX = anchors.reduce((sum, point) => sum + point.x, 0) / anchors.length;
@@ -101,22 +113,6 @@
             }
         } else if (anchors.length === 1) {
             labelOrigin = anchors[0].x - anchors[0].index * labelStep;
-        }
-
-        // Numeric mixed charts place lines at the bin coordinate but offset
-        // grouped columns. Match SCIP to the same fitted month centers used
-        // by the labels. Reset before measuring so repeated redraws cannot drift.
-        for (const series of container.querySelectorAll('.apexcharts-line-series .apexcharts-series')) {
-            if (!series.getAttribute('seriesName')?.startsWith('SCIP')) continue;
-            series.removeAttribute('transform');
-            const marker = series.querySelector('.apexcharts-marker[j]');
-            if (!marker || !anchors.length) continue;
-            const index = Number(marker.getAttribute('j'));
-            const bounds = marker.getBoundingClientRect();
-            const currentX = bounds.left + bounds.width / 2 - containerBounds.left;
-            const delta = labelOrigin + index * labelStep - currentX;
-            const scale = series.getScreenCTM()?.a || 1;
-            series.setAttribute('transform', `translate(${delta / scale}, 0)`);
         }
 
         layer.replaceChildren();
@@ -182,6 +178,40 @@
         }
     }
 
+    function hideScipPoint() {
+        document.getElementById('scip-point-tooltip')?.remove();
+        document.getElementById('behavior-main-chart-container')?.classList.remove('scip-point-hover');
+    }
+
+    function showScipPoint(point, series, data) {
+        hideScipPoint();
+        if (data?.y == null) return;
+        const container = document.getElementById('behavior-main-chart-container');
+        const tooltip = document.createElement('div');
+        tooltip.id = 'scip-point-tooltip';
+        tooltip.className = 'medication-change-tooltip';
+        tooltip.setAttribute('role', 'tooltip');
+        const title = document.createElement('strong');
+        let date = null;
+        if (container.classList.contains('monthly-chart-container')) {
+            const month = Number(container.dataset.firstMonthIndex) + Number(data.x);
+            date = new Date(Date.UTC(Math.floor(month / 12), month % 12, 1));
+            title.textContent = date.toLocaleDateString('en-US', {month:'short', year:'numeric', timeZone:'UTC'});
+        } else {
+            date = new Date(data.x);
+            title.textContent = Number.isNaN(date.getTime()) ? String(data.x) : date.toLocaleDateString('en-US', {timeZone:'UTC'});
+        }
+        const value = document.createElement('div');
+        value.textContent = `${series.name}: ${data.y}`;
+        tooltip.append(title, value);
+        document.body.appendChild(tooltip);
+        container.classList.add('scip-point-hover');
+        const anchor = point.getBoundingClientRect();
+        const bounds = tooltip.getBoundingClientRect();
+        tooltip.style.left = `${Math.max(8, Math.min(anchor.left, innerWidth - bounds.width - 8))}px`;
+        tooltip.style.top = `${Math.max(8, anchor.top - bounds.height - 10)}px`;
+    }
+
     function hideMedicationChange() {
         document.getElementById("medication-change-tooltip")?.remove();
     }
@@ -210,6 +240,7 @@
     function initialize(dotNetReference) {
         if (dotNetReference) dashboardReference = dotNetReference;
         hideMedicationChange();
+        hideScipPoint();
         updateMonthlyAxisLabels();
         updateMonthlyNavigatorWindow();
         if (!monthlyAxisResizeInstalled) {
@@ -221,7 +252,7 @@
                 // Apex debounces its resize redraw; align after the new SVG exists.
                 monthlyResizeTimer = setTimeout(() => updateMonthlyAxisLabels(), 300);
             });
-            window.addEventListener("scroll", hideMedicationChange, true);
+            window.addEventListener("scroll", () => { hideMedicationChange(); hideScipPoint(); }, true);
         }
 
         if (!resetHandlerInstalled) {
@@ -230,6 +261,18 @@
             const medicationArrow = target => target instanceof Element
                 ? target.closest('[class*="medication-change-hit-"]') : null;
             document.addEventListener("mouseover", event => {
+                const point = event.target.closest?.('#behavior-main-chart-container .apexcharts-bar-area[j], #behavior-main-chart-container .apexcharts-marker[j]');
+                if (point && dashboardReference) {
+                    const chart = window.Apex?._chartInstances?.find(item => item.id === 'behavior-main-chart')?.chart;
+                    const seriesIndex = Number(point.getAttribute('index'));
+                    const pointIndex = Number(point.getAttribute('j'));
+                    const series = chart?.w.config.series[seriesIndex];
+                    if (series?.name.startsWith('SCIP: ')) showScipPoint(point, series, series.data[pointIndex]);
+                    if (series && !series.name.startsWith('SCIP: ') && !series.name.endsWith(' (mg)')) {
+                        const data = series.data[pointIndex];
+                        if (data?.x != null) dashboardReference.invokeMethodAsync('OnBehaviorPointHover', series.name, data.x);
+                    }
+                }
                 const arrow = medicationArrow(event.target);
                 if (!arrow || arrow.contains(event.relatedTarget)) return;
                 const key = [...arrow.classList].find(name => name.startsWith("medication-change-hit-"));
@@ -237,6 +280,7 @@
                 showMedicationChange(arrow, change);
             });
             document.addEventListener("mouseout", event => {
+                if (event.target.closest?.('.apexcharts-marker')) hideScipPoint();
                 const arrow = medicationArrow(event.target);
                 if (arrow && !arrow.contains(event.relatedTarget)) hideMedicationChange();
             });

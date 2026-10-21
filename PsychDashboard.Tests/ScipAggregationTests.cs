@@ -30,6 +30,18 @@ public class ScipAggregationTests
     }
 
     [Fact]
+    public void DefaultVisibilityRequiresPositiveCountWithinDatesAndShifts()
+    {
+        var date = new DateTime(2025, 1, 1);
+        ScipRecord[] rows = [new(date, TimeSpan.FromHours(7), "A", 0, "Test", 106),
+            new(date.AddMonths(1), TimeSpan.FromHours(15), "A", 2, "Test", 106)];
+        Assert.False(ScipAggregationService.HasPositiveCount(rows, "A", date, date.AddMonths(1).AddDays(-1), null));
+        Assert.False(ScipAggregationService.HasPositiveCount(rows, "A", date, date.AddMonths(2), ["7-3"]));
+        Assert.True(ScipAggregationService.HasPositiveCount(rows, "A", date, date.AddMonths(2), ["3-11"]));
+        Assert.False(ScipAggregationService.HasPositiveCount(rows, "B", date, date.AddMonths(2), null));
+    }
+
+    [Fact]
     public void MergeDeduplicatesScipWithoutCombiningDistinctShifts()
     {
         var row = new ScipRecord(new DateTime(2025, 1, 1), TimeSpan.FromHours(7), "A", 2, "Test");

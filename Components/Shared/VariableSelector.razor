@@ -54,7 +54,7 @@
         {
             <MudDivider Class="my-1" />
             <MudText Typo="Typo.subtitle2">SCIP maneuvers</MudText>
-            <MudText Typo="Typo.caption">More restrictive maneuvers selected by default.</MudText>
+            <MudText Typo="Typo.caption">More restrictive maneuvers with counts in this timeframe are selected by default.</MudText>
             @foreach (var maneuver in ScipManeuvers)
             {
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="scip-maneuver-option">
@@ -63,7 +63,7 @@
                                  Dense="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Secondary" />
                     <MudText Typo="Typo.caption" Style="flex:1;cursor:pointer"
                              @onclick="@(() => ScipToggled.InvokeAsync(maneuver))">@maneuver</MudText>
-                    <span style="@($"width:20px;height:3px;background:{ScipColor(maneuver)}")"></span>
+                    <span style="@($"width:32px;height:6px;border-radius:3px;flex-shrink:0;background:{ScipColor(maneuver)}")"></span>
                 </MudStack>
             }
         }
