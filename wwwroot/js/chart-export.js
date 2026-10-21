@@ -283,13 +283,6 @@ window.chartExport = {
             }
             y += 4;
         }
-        ensureSpace(9);
-        y += 2;
-        pdf.setTextColor(100, 110, 120);
-        pdf.setFontSize(10);
-        pdf.text('Mean rate is the average of the displayed-period rates within the selected range.', margin, y);
-        y += 4;
-        pdf.setTextColor(35, 43, 51);
         section('Medication Change');
         const medications = summary.medications?.length ? summary.medications : [{ medication: 'No dose changes in selected range' }];
         const columnGap = 10;
