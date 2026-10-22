@@ -234,6 +234,7 @@ window.chartExport = {
         const overview = [
             ['Selected range', summary.dateRange || dateRange],
             ['View / shifts', `${text(summary.view)} / ${text(summary.shifts)}`],
+            ['Days of week', summary.days === '' ? 'None selected' : summary.days || 'All days'],
             ['Total episodes', number(summary.totalEpisodes)]
         ];
         overview.forEach(([label, value]) => {

@@ -30,6 +30,19 @@ public class ScipAggregationTests
     }
 
     [Fact]
+    public void ScipWeekdaysMatchBehaviorFiltersAndPdfTotals()
+    {
+        var monday = new DateTime(2024, 7, 1);
+        ScipRecord[] rows = [new(monday, TimeSpan.FromHours(7), "A", 2, "Test", 106),
+            new(monday.AddDays(1), TimeSpan.FromHours(7), "A", 9, "Test", 106)];
+        var points = ScipAggregationService.Aggregate(rows, "A", AggregationPeriod.Month,
+            [new() { Date = monday }], ["7-3"], selectedDays: [DayOfWeek.Monday]);
+        Assert.Equal(2, Assert.Single(points).Count);
+        Assert.Equal(2, ScipAggregationService.InRange(rows, monday, monday.AddDays(30), ["7-3"], [DayOfWeek.Monday]).Sum(row => row.Count));
+        Assert.False(ScipAggregationService.HasPositiveCount(rows, "A", monday, monday.AddDays(30), ["7-3"], [DayOfWeek.Wednesday]));
+    }
+
+    [Fact]
     public void DefaultVisibilityRequiresPositiveCountWithinDatesAndShifts()
     {
         var date = new DateTime(2025, 1, 1);

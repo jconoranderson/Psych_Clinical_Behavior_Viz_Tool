@@ -36,7 +36,8 @@ namespace PsychDashboard.Services
             HashSet<string>? selectedShifts = null,
             string? selectedResident = null,
             DateTime? filterStartDate = null, 
-            DateTime? filterEndDate = null)
+            DateTime? filterEndDate = null,
+            IReadOnlyCollection<DayOfWeek>? selectedDays = null)
         {
             var behaviorRecords = new List<BehaviorCsvRow>();
             var behaviorPath = _configuration?["DataSources:BehaviorCsvPath"];
@@ -72,7 +73,7 @@ namespace PsychDashboard.Services
                 _logger?.LogWarning("Configured medication CSV was not found at {MedicationCsvPath}", medicationPath);
             }
 
-            return Task.FromResult(ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate));
+            return Task.FromResult(ProcessRecords(new DashboardViewModel(), behaviorRecords, medRecords, period, selectedShifts, selectedResident, filterStartDate, filterEndDate, selectedDays));
         }
 
         public Task<DashboardViewModel> GetPatientHistoryFromRecordsAsync(
@@ -81,11 +82,12 @@ namespace PsychDashboard.Services
             AggregationPeriod period, 
             HashSet<string>? selectedShifts = null,
             DateTime? filterStartDate = null, 
-            DateTime? filterEndDate = null)
+            DateTime? filterEndDate = null,
+            IReadOnlyCollection<DayOfWeek>? selectedDays = null)
         {
             var viewModel = new DashboardViewModel();
             viewModel.Medications = medications;
-            return Task.FromResult(ProcessRecords(viewModel, behaviorRecords, new List<MedicationCsvRow>(), period, selectedShifts, null, filterStartDate, filterEndDate));
+            return Task.FromResult(ProcessRecords(viewModel, behaviorRecords, new List<MedicationCsvRow>(), period, selectedShifts, null, filterStartDate, filterEndDate, selectedDays));
         }
 
         private DashboardViewModel ProcessRecords(
@@ -96,7 +98,8 @@ namespace PsychDashboard.Services
             HashSet<string>? selectedShifts,
             string? selectedResident,
             DateTime? filterStartDate,
-            DateTime? filterEndDate)
+            DateTime? filterEndDate,
+            IReadOnlyCollection<DayOfWeek>? selectedDays)
         {
             if (records.Any())
             {
@@ -160,6 +163,12 @@ namespace PsychDashboard.Services
                         .ToList();
                 }
 
+                if (selectedDays != null)
+                {
+                    filteredRecords = filteredRecords.Where(row => selectedDays.Contains(row.Date!.Value.DayOfWeek)).ToList();
+                    noDataRows = noDataRows.Where(row => selectedDays.Contains(row.Date!.Value.DayOfWeek)).ToList();
+                }
+
                 // Build missing data ranges
                 viewModel.MissingDataRanges = BuildMissingDataRanges(noDataRows, residentRecords);
 
@@ -180,6 +189,21 @@ namespace PsychDashboard.Services
                     AggregationPeriod.Average => AggregateByAverage(filteredRecords),
                     _ => AggregateByDay(filteredRecords)
                 };
+
+                // Keep the calendar axis continuous when weekday filtering leaves
+                // a whole month without observations; these are missing, not zeros.
+                if (period == AggregationPeriod.Month && selectedDays?.Count > 0
+                    && viewModel.GlobalMinDate.HasValue && viewModel.GlobalMaxDate.HasValue)
+                {
+                    var first = filterStartDate ?? viewModel.GlobalMinDate.Value;
+                    var last = filterEndDate ?? viewModel.GlobalMaxDate.Value;
+                    for (var month = new DateTime(first.Year, first.Month, 1); month <= last; month = month.AddMonths(1))
+                        foreach (var target in viewModel.AvailableTargets)
+                            if (!grouped.Any(point => point.Date == month && point.Target == target))
+                                grouped.Add(new DailyBehaviorCount { Date = month, PeriodEnd = month.AddMonths(1).AddDays(-1),
+                                    Target = target, HasData = false });
+                    grouped = grouped.OrderBy(point => point.Date).ToList();
+                }
 
                 viewModel.DailyBehaviorCounts = grouped;
                 viewModel.UnreducedBehaviorCounts = filteredRecords;

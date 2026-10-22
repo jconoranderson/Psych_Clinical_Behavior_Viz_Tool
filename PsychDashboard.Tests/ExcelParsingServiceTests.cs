@@ -65,14 +65,13 @@ public sealed class ExcelParsingServiceTests
     }
 
     [Fact]
-    public void MissingMetadataRetainsPreviousFallbacks()
+    public void MissingResidentMetadataStillUsesDeclaredYear()
     {
         using var data = Workbook();
         data.Tables.Remove("STUDENT INFO");
-        data.Tables.Remove("YiVis");
         var result = _parser.ParseDataSet(data);
         Assert.Single(result.Behaviors);
-        Assert.Equal(DateTime.Now.Year, result.Behaviors[0].Date!.Value.Year);
+        Assert.Equal(2024, result.Behaviors[0].Date!.Value.Year);
     }
 
     [Fact]
@@ -124,6 +123,30 @@ public sealed class ExcelParsingServiceTests
         month.Rows[3][7] = "0";
         month.Rows[3][2] = status;
         Assert.Equal(expected, _parser.ParseDataSet(data).Scip.Count);
+    }
+
+    [Theory]
+    [InlineData("2024-2025", "July", 1, 2024, 7, DayOfWeek.Monday)]
+    [InlineData("2024-2025", "Jan", 1, 2025, 1, DayOfWeek.Wednesday)]
+    [InlineData("2023–2024", "Feb", 29, 2024, 2, DayOfWeek.Thursday)]
+    public void WorkbookDatesUseDeclaredCalendarYear(string year, string month, int day, int actualYear, int actualMonth, DayOfWeek weekday)
+    {
+        using var data = Workbook();
+        data.Tables["YiVis"]!.Rows[4][1] = year;
+        var table = data.Tables["July"]!;
+        table.TableName = month;
+        table.Rows[3][0] = day.ToString();
+        var row = Assert.Single(_parser.ParseDataSet(data).Behaviors);
+        Assert.Equal(new DateTime(actualYear, actualMonth, day), row.Date);
+        Assert.Equal(weekday, row.Date!.Value.DayOfWeek);
+    }
+
+    [Fact]
+    public void MissingWorkbookYearIsNotSilentlyAssignedToToday()
+    {
+        using var data = Workbook();
+        data.Tables["YiVis"]!.Rows[4][1] = "";
+        Assert.Throws<InvalidDataException>(() => _parser.ParseDataSet(data));
     }
 
     private static DataSet Workbook()

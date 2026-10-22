@@ -168,6 +168,7 @@ html, body {
 
 .dashboard-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 18px;
     padding: 10px 12px;

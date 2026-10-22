@@ -6,24 +6,25 @@ namespace PsychDashboard.Services;
 public static class ScipAggregationService
 {
     public static IEnumerable<ScipRecord> InRange(IEnumerable<ScipRecord> records,
-        DateTime? start, DateTime? end, IReadOnlyCollection<string>? shifts) =>
+        DateTime? start, DateTime? end, IReadOnlyCollection<string>? shifts, IReadOnlyCollection<DayOfWeek>? selectedDays = null) =>
         records.Where(row => (!start.HasValue || row.Date.Date >= start.Value.Date)
             && (!end.HasValue || row.Date.Date <= end.Value.Date)
-            && (shifts == null || shifts.Contains(Shift(row.Time))));
+            && (shifts == null || shifts.Contains(Shift(row.Time)))
+            && (selectedDays == null || selectedDays.Contains(row.Date.DayOfWeek)));
 
     public static bool HasPositiveCount(IEnumerable<ScipRecord> records, string name,
-        DateTime? start, DateTime? end, IReadOnlyCollection<string>? shifts) =>
-        InRange(records, start, end, shifts).Any(row => row.Name == name && row.Count > 0);
+        DateTime? start, DateTime? end, IReadOnlyCollection<string>? shifts, IReadOnlyCollection<DayOfWeek>? selectedDays = null) =>
+        InRange(records, start, end, shifts, selectedDays).Any(row => row.Name == name && row.Count > 0);
 
     // Use the behavior chart's actual period boundaries, including its anchored
     // seven-day weeks. SCIP remains a count even when behavior is shown as rate.
     public static List<DailyBehaviorCount> Aggregate(
         IEnumerable<ScipRecord> records, string name, AggregationPeriod period,
         IEnumerable<DailyBehaviorCount> behaviorPeriods, IReadOnlyCollection<string>? shifts,
-        DateTime? selectedStart = null, DateTime? selectedEnd = null)
+        DateTime? selectedStart = null, DateTime? selectedEnd = null,
+        IReadOnlyCollection<DayOfWeek>? selectedDays = null)
     {
-        var rows = records.Where(row => row.Name == name &&
-            (shifts == null || shifts.Contains(Shift(row.Time)))).ToList();
+        var rows = InRange(records, null, null, shifts, selectedDays).Where(row => row.Name == name).ToList();
         var periods = behaviorPeriods.GroupBy(point => point.Date.Date)
             .Select(group => group.First()).OrderBy(point => point.Date).ToList();
         var result = new List<DailyBehaviorCount>();

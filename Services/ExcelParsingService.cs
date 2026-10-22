@@ -43,7 +43,7 @@ namespace PsychDashboard.Services
             var results = new ParsedWorkbookResult();
             string studentName = "Unknown Student";
             string personId = "Unknown ID";
-            int startYear = DateTime.Now.Year;
+            int startYear = 0;
 
             // 1. Extract Student Info
             if (result.Tables.Contains("STUDENT INFO"))
@@ -84,7 +84,7 @@ namespace PsychDashboard.Services
                 var yivisTable = result.Tables["YiVis"]!;
                 if (yivisTable.Rows.Count >= 5 && yivisTable.Columns.Count >= 2)
                 {
-                    var yearStr = yivisTable.Rows[4][1]?.ToString(); // B5
+                    var yearStr = yivisTable.Rows[4][1]?.ToString()?.Replace('–', '-').Replace('—', '-'); // B5
                     if (!string.IsNullOrEmpty(yearStr) && yearStr.Contains("-"))
                     {
                         var parts = yearStr.Split('-');
@@ -126,6 +126,9 @@ namespace PsychDashboard.Services
                     }
                 }
             }
+
+            if (!yearFound || startYear < 1900 || startYear > 9998)
+                throw new InvalidDataException("The workbook year could not be determined. Set the year range in YiVis B5 or the month/year in a monthly notes sheet before importing.");
 
             // 2. Extract Data from Monthly Sheets
             foreach (var sheetName in MonthSheets)

@@ -11,6 +11,42 @@ public sealed class PatientHistoryServiceTests
         null!,
         new ConfigurationBuilder().Build());
 
+    [Theory]
+    [InlineData(AggregationPeriod.Day)]
+    [InlineData(AggregationPeriod.Week)]
+    [InlineData(AggregationPeriod.Month)]
+    [InlineData(AggregationPeriod.Average)]
+    public async Task WeekdaysFilterActualDatesBeforeAggregationAndRateCalculation(AggregationPeriod period)
+    {
+        var monday = new DateTime(2024, 7, 1);
+        var rows = new List<PatientHistoryService.BehaviorCsvRow> {
+            Row(monday, 2), Row(monday.AddDays(1), 99), Row(monday.AddDays(7), 4),
+            Row(monday, 88, TimeSpan.FromHours(16)) };
+        var model = await _service.GetPatientHistoryFromRecordsAsync(rows, [], period,
+            selectedShifts: ["7-3"], selectedDays: [DayOfWeek.Monday]);
+        Assert.Equal(6, model.DailyBehaviorCounts.Sum(point => point.Count));
+        Assert.Equal(3, model.DailyBehaviorCounts.Average(point => point.Rate));
+        Assert.Equal(2, model.UnreducedBehaviorCounts.Count);
+        Assert.Equal(monday.AddDays(7), model.GlobalMaxDate);
+        var empty = await _service.GetPatientHistoryFromRecordsAsync(rows, [], period, selectedDays: []);
+        Assert.Empty(empty.DailyBehaviorCounts);
+        Assert.Equal(monday, empty.GlobalMinDate);
+    }
+
+    [Fact]
+    public async Task WeekdayFilteringKeepsEmptyMonthsOnCalendarAxis()
+    {
+        var rows = new List<PatientHistoryService.BehaviorCsvRow> {
+            Row(new DateTime(2024, 7, 1), 2), Row(new DateTime(2024, 8, 1), 99),
+            Row(new DateTime(2024, 9, 2), 4) };
+        var model = await _service.GetPatientHistoryFromRecordsAsync(rows, [], AggregationPeriod.Month,
+            selectedDays: [DayOfWeek.Monday]);
+        Assert.Equal(3, model.DailyBehaviorCounts.Count);
+        Assert.False(model.DailyBehaviorCounts[1].HasData);
+        Assert.Equal(new DateTime(2024, 8, 1), model.DailyBehaviorCounts[1].Date);
+        Assert.Equal(6, model.DailyBehaviorCounts.Sum(point => point.Count));
+    }
+
     [Fact]
     public async Task WeekGroupingUsesSevenDaySegmentsFromFirstAvailableDate()
     {

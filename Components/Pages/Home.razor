@@ -253,6 +253,18 @@
                     </MudChipSet>
                 </div>
 
+                <div class="control-group">
+                    <span class="control-label">Days of week</span>
+                    <MudChipSet T="DayOfWeek" SelectionMode="SelectionMode.MultiSelection"
+                                SelectedValues="_selectedDays" SelectedValuesChanged="OnDaySelectionChanged"
+                                CheckMark="true" Color="MudBlazor.Color.Default" Variant="Variant.Outlined">
+                        @foreach (var day in CalendarDays)
+                        {
+                            <MudChip T="DayOfWeek" Value="day" Size="MudBlazor.Size.Small">@day.ToString()[..3]</MudChip>
+                        }
+                    </MudChipSet>
+                </div>
+
                 @* CENTER: Medication + Missing Data Toggles *@
                 <div class="control-group overlays-group">
                     <span class="control-label">Optional overlays</span>
@@ -944,6 +956,17 @@
     private string _chartTitle => string.IsNullOrEmpty(_selectedResident) ? "Behavior History" : _selectedResident;
 
     // Shift filtering
+    private static readonly DayOfWeek[] CalendarDays = [DayOfWeek.Monday, DayOfWeek.Tuesday,
+        DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+    private IReadOnlyCollection<DayOfWeek> _selectedDays = Enum.GetValues<DayOfWeek>();
+    private async Task OnDaySelectionChanged(IReadOnlyCollection<DayOfWeek> days)
+    {
+        _selectedDays = days;
+        await LoadDataAsync();
+        BuildChartOptions();
+        await RenderChart();
+    }
+
     private IReadOnlyCollection<string> _selectedShifts = new HashSet<string> { "7-3", "3-11", "11-7" };
     private string? _selectedResident;
     private DateTime? _preZoomStartDate;
@@ -967,7 +990,7 @@
     private bool IsScipSelected(string name) => _scipSelection.TryGetValue(name, out var selected)
         ? selected : _parsedWorkbook!.Scip.Any(row => row.Name == name && IsRestrictiveScip(row))
             && ScipAggregationService.HasPositiveCount(_parsedWorkbook.Scip, name,
-                _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End, _selectedShifts);
+                _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End, _selectedShifts, _selectedDays);
     private async Task ToggleScipManeuver(string name)
     {
         _scipSelection[name] = !IsScipSelected(name);
@@ -1827,32 +1850,32 @@
 
             _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                _selectedPeriod, shifts, filterStart, filterEnd);
+                _selectedPeriod, shifts, filterStart, filterEnd, _selectedDays);
             if (refreshNavigator)
             {
                 _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                     _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
                     _selectedPeriod,
-                    shifts, null, null);
+                    shifts, null, null, _selectedDays);
                 _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                     ? _fullHistoryViewModel
                     : await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                        AggregationPeriod.Month, shifts, null, null);
+                        AggregationPeriod.Month, shifts, null, null, _selectedDays);
             }
         }
         else
         {
-            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+            _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, _selectedDays);
             if (refreshNavigator)
             {
                 _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryAsync(
                     _selectedPeriod,
-                    shifts, _selectedResident, null, null);
+                    shifts, _selectedResident, null, null, _selectedDays);
                 _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                     ? _fullHistoryViewModel
                     : await PatientHistoryService.GetPatientHistoryAsync(
-                        AggregationPeriod.Month, shifts, _selectedResident, null, null);
+                        AggregationPeriod.Month, shifts, _selectedResident, null, null, _selectedDays);
             }
         }
 
@@ -1865,32 +1888,32 @@
                 {
                     _viewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                         _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                        _selectedPeriod, shifts, filterStart, filterEnd);
+                        _selectedPeriod, shifts, filterStart, filterEnd, _selectedDays);
                     if (refreshNavigator)
                     {
                         _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                             _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
                             _selectedPeriod,
-                            shifts, null, null);
+                            shifts, null, null, _selectedDays);
                         _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                             ? _fullHistoryViewModel
                             : await PatientHistoryService.GetPatientHistoryFromRecordsAsync(
                                 _parsedWorkbook.Behaviors, _parsedWorkbook.Medications,
-                                AggregationPeriod.Month, shifts, null, null);
+                                AggregationPeriod.Month, shifts, null, null, _selectedDays);
                     }
                 }
                 else
                 {
-                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd);
+                    _viewModel = await PatientHistoryService.GetPatientHistoryAsync(_selectedPeriod, shifts, _selectedResident, filterStart, filterEnd, _selectedDays);
                     if (refreshNavigator)
                     {
                         _fullHistoryViewModel = await PatientHistoryService.GetPatientHistoryAsync(
                             _selectedPeriod,
-                            shifts, _selectedResident, null, null);
+                            shifts, _selectedResident, null, null, _selectedDays);
                         _navigatorViewModel = _selectedPeriod == AggregationPeriod.Month
                             ? _fullHistoryViewModel
                             : await PatientHistoryService.GetPatientHistoryAsync(
-                                AggregationPeriod.Month, shifts, _selectedResident, null, null);
+                                AggregationPeriod.Month, shifts, _selectedResident, null, null, _selectedDays);
                     }
                 }
             }
@@ -2262,7 +2285,7 @@
             ? AvailableScipManeuvers.Where(IsScipSelected)
                 .ToDictionary(name => name, name => ScipAggregationService.Aggregate(
                     _parsedWorkbook!.Scip, name, _selectedPeriod, ChartBehaviorCounts,
-                    _selectedShifts, _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End))
+                    _selectedShifts, _startDate ?? _dateRange?.Start, _endDate ?? _dateRange?.End, _selectedDays))
             : new();
         var composition = ChartComposition;
         var isStacked = composition.IsStacked;
@@ -3399,7 +3422,7 @@
     {
         // Load the current exporter at use time, including in long-lived tabs.
         await using var exporter = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "./js/chart-export.js?v=20");
+            "import", "./js/chart-export.js?v=21");
         var options = await JS.InvokeAsync<PdfExportOptions?>("chartExport.requestOptions", _chartTitle);
         if (options == null) return;
         var title = options.Title;
@@ -3456,6 +3479,7 @@
             Grouping = _selectedPeriod.ToString(),
             Measure = _yAxisMetric.ToString(),
             View = _chartType.ToString(),
+            Days = string.Join(", ", CalendarDays.Where(day => _selectedDays.Contains(day)).Select(day => day.ToString()[..3])),
             Shifts = string.Join(", ", _selectedShifts.OrderBy(shift => shift)),
             Overlays = string.Join(", ", new[]
             {
@@ -3472,7 +3496,7 @@
                 ? AvailableScipManeuvers.Where(IsScipSelected).Select(name => new
                 {
                     Maneuver = name,
-                    Total = ScipAggregationService.InRange(_parsedWorkbook!.Scip, start, end, _selectedShifts)
+                    Total = ScipAggregationService.InRange(_parsedWorkbook!.Scip, start, end, _selectedShifts, _selectedDays)
                         .Where(row => row.Name == name).Sum(row => row.Count)
                 }).ToArray() : Array.Empty<object>(),
             Medications = medicationSummary
@@ -3486,6 +3510,7 @@
         public string Grouping { get; init; } = "";
         public string Measure { get; init; } = "";
         public string View { get; init; } = "";
+        public string Days { get; init; } = "";
         public string Shifts { get; init; } = "";
         public string Overlays { get; init; } = "";
         public int TotalEpisodes { get; init; }
