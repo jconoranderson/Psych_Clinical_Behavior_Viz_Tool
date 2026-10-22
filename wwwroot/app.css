@@ -214,6 +214,18 @@ html, body {
     font-weight: 600;
 }
 
+.weekday-chip-set .mud-chip.weekday-chip:not(.mud-chip-selected) {
+    background-color: transparent;
+    color: var(--mud-palette-primary);
+    border: 1px solid var(--mud-palette-primary);
+}
+
+.weekday-chip-set .mud-chip.weekday-chip.mud-chip-selected {
+    background-color: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+    border: 1px solid var(--mud-palette-primary);
+}
+
 .overlays-group {
     min-width: 190px;
 }
