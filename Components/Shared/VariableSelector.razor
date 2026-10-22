@@ -140,14 +140,19 @@
     // Default color palette for targets (fallback)
     private static readonly string[] DefaultColors = new[]
     {
-        "#2196F3", "#4CAF50", "#00BCD4", "#3F51B5", "#8BC34A",
-        "#CDDC39", "#009688", "#03A9F4", "#673AB7", "#FFEB3B"
+        "#2E7D32", "#E91E63", "#00838F", "#C49000", "#3949AB",
+        "#212121", "#8BC34A", "#00BCD4", "#673AB7", "#AD1457",
+        "#827717", "#00695C"
     };
 
     // Fixed color mapping for specific behaviors
     private static readonly Dictionary<string, string> FixedColors = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Aggression", "#F44336" },            // Red
+        { "Self Mutilation", "#2196F3" },
+        { "Self-Mutilation", "#2196F3" },
+        { "Disruptive", "#FF9800" },
+        { "Disruption", "#FF9800" },
         { "Disruptive Behaviors", "#FF9800" },  // Orange
         { "Self-injury", "#9C27B0" },           // Purple
         { "SIB", "#9C27B0" },                   // Purple
@@ -167,15 +172,26 @@
     {
         if (!_targetStates.ContainsKey(target))
         {
+            var usedColors = _targetStates.Values.Select(state => state.Color)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             string color;
-            if (FixedColors.TryGetValue(target, out var fixedColor))
+            if (FixedColors.TryGetValue(target, out var fixedColor) && !usedColors.Contains(fixedColor))
             {
                 color = fixedColor;
             }
             else
             {
-                var index = AvailableTargets.IndexOf(target);
-                color = DefaultColors[Math.Max(0, index) % DefaultColors.Length];
+                // Never derive colors from a selector index: parameters can lag
+                // behind a newly merged workbook. Reserve the familiar fixed
+                // colors and allocate an unused color for each additional target.
+                color = DefaultColors.FirstOrDefault(candidate => !usedColors.Contains(candidate)) ?? "";
+                for (var index = 1; color.Length == 0; index++)
+                {
+                    var candidate = $"#{(index * 2654435761u & 0xFFFFFF):X6}";
+                    if (!usedColors.Contains(candidate) &&
+                        !FixedColors.Values.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+                        color = candidate;
+                }
             }
 
             _targetStates[target] = new TargetState
