@@ -2029,6 +2029,8 @@
                 .LogError(ex, "Workbook batch upload or chart refresh failed");
             _uploadMessage = batchAdded
                 ? "The workbooks were loaded, but the chart could not be refreshed. Clear the workbooks and try again."
+                : ex is InvalidDataException
+                ? $"{ex.Message} No files from this batch were added."
                 : $"Could not load {currentFileName ?? "the workbook"}. Check that it is an unencrypted behavior workbook with readable data. No files from this batch were added.";
             _uploadMessageColor = MudBlazor.Color.Error;
         }

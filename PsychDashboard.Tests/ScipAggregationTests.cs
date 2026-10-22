@@ -58,8 +58,8 @@ public class ScipAggregationTests
     public void MergeDeduplicatesScipWithoutCombiningDistinctShifts()
     {
         var row = new ScipRecord(new DateTime(2025, 1, 1), TimeSpan.FromHours(7), "A", 2, "Test");
-        var result = WorkbookMergeService.Merge(new ParsedWorkbookResult { Scip = [row] },
-            [new ParsedWorkbookResult { Scip = [row, row with { SourceColumn = 106 }, row with { Time = TimeSpan.FromHours(15) }] }]);
+        var result = WorkbookMergeService.Merge(new ParsedWorkbookResult { StudentInfoName = "Test", Scip = [row] },
+            [new ParsedWorkbookResult { StudentInfoName = "Test", Scip = [row, row with { SourceColumn = 106 }, row with { Time = TimeSpan.FromHours(15) }] }]);
         Assert.Equal(2, result.Scip.Count);
         Assert.Equal(106, result.Scip.Single(record => record.Time == TimeSpan.FromHours(7)).SourceColumn);
     }

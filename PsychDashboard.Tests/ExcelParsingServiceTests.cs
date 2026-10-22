@@ -23,6 +23,7 @@ public sealed class ExcelParsingServiceTests
         using var stream = WriteXlsx(data);
 
         var result = await _parser.ParseWorkbookAsync(stream);
+        Assert.Equal("Test Resident", result.StudentInfoName);
         var merged = WorkbookMergeService.Merge(null, [result]);
 
         Assert.Equal(2, merged.Behaviors.Count);
@@ -70,6 +71,7 @@ public sealed class ExcelParsingServiceTests
         using var data = Workbook();
         data.Tables.Remove("STUDENT INFO");
         var result = _parser.ParseDataSet(data);
+        Assert.Null(result.StudentInfoName);
         Assert.Single(result.Behaviors);
         Assert.Equal(2024, result.Behaviors[0].Date!.Value.Year);
     }

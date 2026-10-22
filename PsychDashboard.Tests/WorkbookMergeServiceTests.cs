@@ -12,6 +12,7 @@ public sealed class WorkbookMergeServiceTests
         var shared = Behavior(new DateTime(2024, 7, 1), 2);
         var first = new ParsedWorkbookResult
         {
+            StudentInfoName = "Example Student",
             Behaviors =
             [
                 Behavior(new DateTime(2023, 7, 1), 1),
@@ -26,6 +27,7 @@ public sealed class WorkbookMergeServiceTests
         };
         var second = new ParsedWorkbookResult
         {
+            StudentInfoName = "Example Student",
             Behaviors =
             [
                 shared,
@@ -47,6 +49,37 @@ public sealed class WorkbookMergeServiceTests
         Assert.Single(merged.Medications);
         Assert.Equal(new[] { "Low", "High", "Critical" }, merged.IntensityLabels);
         Assert.Equal(new[] { "< 5 minutes", "5+ minutes" }, merged.DurationLabels);
+    }
+
+    [Theory]
+    [InlineData("Other Student")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void RejectsMismatchedOrMissingIdentityWithoutChangingExistingData(string? name)
+    {
+        var existing = new ParsedWorkbookResult { StudentInfoName = "Example Student",
+            Behaviors = [Behavior(new DateTime(2025, 7, 1), 2)] };
+        var addition = new ParsedWorkbookResult { StudentInfoName = name };
+        var error = Assert.Throws<InvalidDataException>(() => WorkbookMergeService.Merge(existing, [addition]));
+        Assert.Contains("STUDENT INFO!A1", error.Message);
+        Assert.Single(existing.Behaviors);
+    }
+
+    [Fact]
+    public void ValidatesNamesWithinSimultaneousUpload()
+    {
+        Assert.Throws<InvalidDataException>(() => WorkbookMergeService.Merge(null,
+            [new() { StudentInfoName = "First Student" }, new() { StudentInfoName = "Second Student" }]));
+    }
+
+    [Fact]
+    public void IgnoresCaseAndSurroundingWhitespaceAndPreservesIdentityForNextUpload()
+    {
+        var merged = WorkbookMergeService.Merge(new() { StudentInfoName = "Example Student" },
+            [new() { StudentInfoName = " example student " }]);
+        Assert.Equal("Example Student", merged.StudentInfoName);
+        Assert.Throws<InvalidDataException>(() => WorkbookMergeService.Merge(merged,
+            [new() { StudentInfoName = "Other Student" }]));
     }
 
     private static PatientHistoryService.BehaviorCsvRow Behavior(DateTime date, double count) =>

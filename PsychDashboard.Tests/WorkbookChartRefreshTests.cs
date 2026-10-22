@@ -210,6 +210,7 @@ public sealed class WorkbookChartRefreshTests
 
     private static ParsedWorkbookResult Workbook(int year, string name) => new()
     {
+        StudentInfoName = "Test",
         Behaviors = new[] { 1, 31 }.Select(day => new PatientHistoryService.BehaviorCsvRow
         {
             Date = new DateTime(year, 1, day), Person_ID = "Test", Target = name,

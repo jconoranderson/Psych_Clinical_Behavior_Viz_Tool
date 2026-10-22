@@ -11,6 +11,7 @@ namespace PsychDashboard.Services
 {
     public class ParsedWorkbookResult
     {
+        public string? StudentInfoName { get; set; }
         public List<PsychDashboard.Models.ScipRecord> Scip { get; set; } = new();
         public List<PatientHistoryService.BehaviorCsvRow> Behaviors { get; set; } = new();
         public List<PsychDashboard.Models.Medication> Medications { get; set; } = new();
@@ -52,6 +53,7 @@ namespace PsychDashboard.Services
                 if (infoTable.Rows.Count > 0 && infoTable.Columns.Count > 0)
                 {
                     studentName = infoTable.Rows[0][0]?.ToString() ?? "Unknown Student";
+                    results.StudentInfoName = infoTable.Rows[0][0]?.ToString()?.Trim();
                     personId = studentName; // In old system they sometimes just used name, or we can look for ID
                 }
             }
