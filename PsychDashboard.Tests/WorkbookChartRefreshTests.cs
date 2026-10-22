@@ -164,6 +164,8 @@ public sealed class WorkbookChartRefreshTests
         Set(page, "_renderedChartState", Activator.CreateInstance(stateType, chartType, stacked, false, true, true)!);
         Invoke(page, "BuildChartOptions");
         var options = Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options");
+        Assert.Equal(period != AggregationPeriod.Average, options.Chart.Zoom.Enabled);
+        Assert.Equal(period != AggregationPeriod.Average, options.Chart.Toolbar.Show);
         Assert.Contains("SCIP frequency", (List<string>)options.Yaxis.Last().Title.Text);
         Assert.Equal(0, options.Yaxis.Last().DecimalsInFloat);
         Assert.Equal(ApexCharts.ChartType.Line, options.Chart.Type);

@@ -335,6 +335,7 @@
         let lastMonthlyWindowKey = null;
 
         control.addEventListener("input", function () {
+            if (control.disabled || control.dataset.period === "Average") return;
             // Apex may report zoomX at a data boundary as a reset-zoom event.
             // Keep navigator-driven events distinct from toolbar zoom/reset.
             suppressChartZoomEventsUntil = performance.now() + 750;

@@ -460,3 +460,5 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 #scip-point-tooltip > strong { display: block; font-size: 16px; margin-bottom: 8px; }
 .scip-tooltip-row { display: flex; justify-content: space-between; gap: 24px; padding: 4px 0; }
 .scip-tooltip-row + .scip-tooltip-row { border-top: 1px solid #edf0f3; }
+
+.navigator-window-input:disabled { cursor: default; pointer-events: none; }

@@ -859,7 +859,7 @@
                     {
                         <div style="height:135px; min-height:0; padding:0 8px 2px; border-top:1px solid #eceff1;">
                             <MudText Typo="Typo.caption" Style="display:block; color:#68757f; font-weight:600; margin:2px 0 -5px 4px;">
-                                Full history — drag the highlighted window
+                                @(_selectedPeriod == AggregationPeriod.Average ? "Full history — use the date range picker in Rolling mode" : "Full history — drag the highlighted window")
                             </MudText>
                             <div style="height:112px; position:relative;">
                                 <ApexChart @key="NavigatorChartKey"
@@ -884,6 +884,7 @@
                                 </ApexChart>
                                 <div class="navigator-selection-window" style="position:absolute; top:23px; bottom:31px; left:@NavigatorSelectionLeftPercent%; width:@NavigatorSelectionWidthPercent%; background:rgba(91,76,226,.14); border:1px solid rgba(91,76,226,.65); border-radius:3px; pointer-events:none; z-index:1;"></div>
                                 <input @key="NavigatorControlKey" id="navigator-window-control" class="navigator-window-input" type="range"
+                                       disabled="@(_selectedPeriod == AggregationPeriod.Average)"
                                        min="@(_selectedPeriod == AggregationPeriod.Month ? 0 : NavigatorWindowMinDay)"
                                        max="@(_selectedPeriod == AggregationPeriod.Month ? NavigatorWindowMaxMonthIndex : NavigatorWindowMaxDay)"
                                        value="@(_selectedPeriod == AggregationPeriod.Month ? NavigatorSelectedStartMonthIndex : NavigatorSelectedStartDay)"
@@ -894,7 +895,7 @@
                                        data-period-count="@NavigatorSelectedPeriodCount"
                                        data-first-month-index="@NavigatorFirstMonthIndex"
                                        data-month-count="@(NavigatorBehaviorCounts.Select(item => item.Date.Date).Distinct().Count())"
-                                       aria-label="Move selected date window" title="Drag to scroll through the full history"
+                                       aria-label="Move selected date window" title="@(_selectedPeriod == AggregationPeriod.Average ? "Use the date range picker" : "Drag to scroll through the full history")"
                                        style="--navigator-window-width:@NavigatorSelectionWidthPercent%;"
                                        @onchange="OnNavigatorWindowChanged" />
                             </div>
@@ -1237,6 +1238,7 @@
     // --- Event Handlers ---
     private async Task OnPeriodChanged(AggregationPeriod period)
     {
+        CancelNavigatorLiveUpdate();
         ClearChartZoomBaseline();
         _selectedPeriod = period;
         await LoadDataAsync();
@@ -1285,6 +1287,7 @@
 
     private async Task OnNavigatorWindowChanged(ChangeEventArgs e)
     {
+        if (_selectedPeriod == AggregationPeriod.Average) return;
         if (!int.TryParse(e.Value?.ToString(), out var requestedStartDay)) return;
 
         CancelNavigatorLiveUpdate();
@@ -1316,6 +1319,7 @@
 
     private async Task OnNavigatorWindowInput(ChangeEventArgs e)
     {
+        if (_selectedPeriod == AggregationPeriod.Average) return;
         if (!int.TryParse(e.Value?.ToString(), out var requestedStartDay)) return;
 
         var spanDays = NavigatorSelectedSpanDays;
@@ -1503,6 +1507,7 @@
     [JSInvokable]
     public async Task ResetChartToFullRange()
     {
+        if (_selectedPeriod == AggregationPeriod.Average) return;
         var fullRange = GetFullAvailableDateRange();
         if (!fullRange.Start.HasValue || !fullRange.End.HasValue)
             return;
@@ -1530,7 +1535,7 @@
 
     private Task OnNavigatorChanged(SelectionData<DailyBehaviorCount> selection)
     {
-        if (_isApplyingNavigatorSelection ||
+        if (_selectedPeriod == AggregationPeriod.Average || _isApplyingNavigatorSelection ||
             _isApplyingChartZoom ||
             selection?.XAxis == null ||
             !selection.XAxis.Min.HasValue ||
@@ -1565,7 +1570,7 @@
             return;
         }
 
-        if (!ReferenceEquals(_navigatorUpdateDebounce, debounce))
+        if (_selectedPeriod == AggregationPeriod.Average || !ReferenceEquals(_navigatorUpdateDebounce, debounce))
             return;
 
         var fullRange = GetFullAvailableDateRange();
@@ -2879,10 +2884,10 @@
                     : (_renderedChartState.ChartType == ChartDisplayType.Bar
                         ? ApexCharts.ChartType.Bar
                         : ApexCharts.ChartType.Line),
-                Toolbar = new Toolbar { Show = true },
+                Toolbar = new Toolbar { Show = _selectedPeriod != AggregationPeriod.Average },
                 Zoom = new Zoom
                 {
-                    Enabled = true,
+                    Enabled = _selectedPeriod != AggregationPeriod.Average,
                     Type = AxisType.X,
                     AutoScaleYaxis = true
                 },
