@@ -196,6 +196,24 @@ html, body {
     text-transform: uppercase;
 }
 
+.weekday-chip-set {
+    gap: 4px;
+    flex-wrap: nowrap;
+    padding: 4px 0;
+}
+
+.weekday-chip-set .mud-chip.weekday-chip {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+    font-weight: 600;
+}
+
 .overlays-group {
     min-width: 190px;
 }

@@ -257,10 +257,11 @@
                     <span class="control-label">Days of week</span>
                     <MudChipSet T="DayOfWeek" SelectionMode="SelectionMode.MultiSelection"
                                 SelectedValues="_selectedDays" SelectedValuesChanged="OnDaySelectionChanged"
-                                CheckMark="true" Color="MudBlazor.Color.Default" Variant="Variant.Outlined">
+                                Class="weekday-chip-set" CheckMark="false" Color="MudBlazor.Color.Primary" Variant="Variant.Outlined">
                         @foreach (var day in CalendarDays)
                         {
-                            <MudChip T="DayOfWeek" Value="day" Size="MudBlazor.Size.Small">@day.ToString()[..3]</MudChip>
+                            <MudChip T="DayOfWeek" Value="day" Size="MudBlazor.Size.Small" Class="weekday-chip"
+                                     title="@day.ToString()" aria-label="@day.ToString()">@day.ToString()[0]</MudChip>
                         }
                     </MudChipSet>
                 </div>
