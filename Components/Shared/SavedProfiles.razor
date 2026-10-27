@@ -3,14 +3,13 @@
 
 <div class="saved-profiles">
     <label for="saved-profile">Saved profiles</label>
-    <select id="saved-profile" @bind="_selectedId" disabled="@(!_ready)">
+    <select id="saved-profile" @bind="_selectedId" @bind:after="OnProfileSelected" disabled="@(!_ready || _applying)">
         <option value="">Choose a profile</option>
         @foreach (var profile in _profiles.OrderBy(p => p.Name))
         {
             <option value="@profile.Id">@profile.Name — @(profile.Person ?? "any individual")</option>
         }
     </select>
-    <button type="button" disabled="@(!CanApply)" @onclick="Apply">Apply</button>
     <button type="button" disabled="@(!_ready || !Enabled)" @onclick="() => BeginEdit(false)">Save current view</button>
     <button type="button" disabled="@(!CanApply)" @onclick="Update">Update</button>
     <button type="button" disabled="@(Selected == null)" @onclick="() => BeginEdit(true)">Rename</button>
@@ -54,7 +53,7 @@
     [Parameter] public EventCallback<ViewProfile> OnApply { get; set; }
     private const string StorageKey = "psych-dashboard.view-profiles.v1";
     private List<ViewProfile> _profiles = new();
-    private bool _ready, _editing, _renaming, _individual;
+    private bool _ready, _editing, _renaming, _individual, _applying;
     private string _selectedId = "", _name = "", _message = "";
     private string? _appliedId, _snapshot;
     private string SettingsSnapshot()
@@ -148,6 +147,22 @@
             _selectedId = profile.Id; _editing = false;
             if (!_renaming) RememberApplied(profile.Id);
             _message = $"Saved “{name}”. Changes to the chart are saved only when you choose Update.";
+        }
+    }
+
+    private async Task OnProfileSelected()
+    {
+        _editing = false;
+        _message = "";
+        if (!CanApply) return;
+        _applying = true;
+        try
+        {
+            await Apply();
+        }
+        finally
+        {
+            _applying = false;
         }
     }
 

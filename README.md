@@ -49,7 +49,7 @@ If a workbook cannot be read or contains no readable behavior data, the upload m
 After loading a workbook, configure the chart and choose **Save current view**.
 Give the profile a name and choose whether it applies only to this individual
 (matched using the workbook name) or to any individual. Select a saved profile
-and click **Apply** after loading another workbook. Use **Update** to explicitly
+after loading another workbook to apply it immediately. Use **Update** to explicitly
 replace its settings, or **Rename** and **Delete** to manage it.
 
 Profiles remember behavior and medication selections/colors, SCIP selections,
