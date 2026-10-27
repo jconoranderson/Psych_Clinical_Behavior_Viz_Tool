@@ -44,6 +44,25 @@ The example above shows monthly behavior rates as colored bars with medication d
 
 If a workbook cannot be read or contains no readable behavior data, the upload message identifies the file. No files from the failed batch are added, and previously loaded data remains available. Differences or repeated labels in workbook headers do not block loading.
 
+## Saved viewing profiles
+
+After loading a workbook, configure the chart and choose **Save current view**.
+Give the profile a name and choose whether it applies only to this individual
+(matched using the workbook name) or to any individual. Select a saved profile
+and click **Apply** after loading another workbook. Use **Update** to explicitly
+replace its settings, or **Rename** and **Delete** to manage it.
+
+Profiles remember behavior and medication selections/colors, SCIP selections,
+overlays, chart type, measure, grouping, shifts, and weekdays. They leave the
+current date range unchanged. Variables missing from a workbook remain in the
+saved profile; newly encountered variables are unselected when applying it.
+
+Profiles are stored as JSON in localStorage under
+`psych-dashboard.view-profiles.v1`. They persist across browser sessions on the
+same site and browser profile. Clearing site data removes them; they do not sync
+between computers. Only viewing settings, profile names, and optional individual
+names are saved, never workbook observations or clinical notes.
+
 ## Technologies Used
 
 - [ASP.NET Core Blazor](https://dotnet.microsoft.com/en-us/apps/aspnet/web-apps/blazor)
