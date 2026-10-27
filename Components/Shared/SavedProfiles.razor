@@ -5,20 +5,28 @@
     <label for="saved-profile">Saved profiles</label>
     <select id="saved-profile" @bind="_selectedId" disabled="@(!_ready)">
         <option value="">Choose a profile</option>
-        @foreach (var profile in _profiles.Where(MatchesPerson).OrderBy(p => p.Name))
+        @foreach (var profile in _profiles.OrderBy(p => p.Name))
         {
-            <option value="@profile.Id">@profile.Name @(profile.Person == null ? "(any individual)" : "")</option>
+            <option value="@profile.Id">@profile.Name — @(profile.Person ?? "any individual")</option>
         }
     </select>
-    <button type="button" disabled="@(Selected == null || !Enabled)" @onclick="Apply">Apply</button>
+    <button type="button" disabled="@(!CanApply)" @onclick="Apply">Apply</button>
     <button type="button" disabled="@(!_ready || !Enabled)" @onclick="() => BeginEdit(false)">Save current view</button>
-    <button type="button" disabled="@(Selected == null || !Enabled)" @onclick="Update">Update</button>
+    <button type="button" disabled="@(!CanApply)" @onclick="Update">Update</button>
     <button type="button" disabled="@(Selected == null)" @onclick="() => BeginEdit(true)">Rename</button>
     <button type="button" disabled="@(Selected == null)" @onclick="Delete">Delete</button>
-    <span class="profile-hint">Saved in this browser</span>
+    <span class="profile-hint">@(_ready ? $"{_profiles.Count} saved in this browser" : "Browser storage unavailable")</span>
     @if (Enabled && Selected?.Id == _appliedId && _snapshot != SettingsSnapshot())
     {
         <span class="profile-hint">Modified — choose Update to save changes</span>
+    }
+    @if (_ready && !Enabled && _profiles.Count > 0)
+    {
+        <span class="profile-hint">@_profiles.Count saved profile(s). Load a workbook to apply one.</span>
+    }
+    @if (Selected is { Person: not null } selected && (!Enabled || !MatchesPerson(selected)))
+    {
+        <span class="profile-hint">Load a workbook for @selected.Person to apply or update this profile.</span>
     }
     @if (_editing)
     {
@@ -60,7 +68,8 @@
         _appliedId = id;
         _snapshot = SettingsSnapshot();
     }
-    private ViewProfile? Selected => _profiles.FirstOrDefault(p => p.Id == _selectedId && MatchesPerson(p));
+    private ViewProfile? Selected => _profiles.FirstOrDefault(p => p.Id == _selectedId);
+    private bool CanApply => Enabled && Selected is { } profile && MatchesPerson(profile);
     private bool MatchesPerson(ViewProfile p) => p.Person == null ||
         string.Equals(p.Person.Trim(), Person?.Trim(), StringComparison.OrdinalIgnoreCase);
 
@@ -100,7 +109,14 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, JsonSerializer.Serialize(next));
+            var json = JsonSerializer.Serialize(next);
+            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, json);
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (stored != json)
+            {
+                _message = "The browser did not retain this profile. Please check site storage permissions before closing the page.";
+                return false;
+            }
             _profiles = next;
             return true;
         }
@@ -137,7 +153,7 @@
 
     private async Task Apply()
     {
-        if (Selected is not { } profile) return;
+        if (!CanApply || Selected is not { } profile) return;
         await OnApply.InvokeAsync(profile);
         RememberApplied(profile.Id);
         var current = Capture();
@@ -150,7 +166,7 @@
 
     private async Task Update()
     {
-        if (Selected is not { } previous) return;
+        if (!CanApply || Selected is not { } previous) return;
         if (!await JS.InvokeAsync<bool>("confirm", $"Replace the settings in “{previous.Name}” with the current view?")) return;
         var profile = Capture();
         profile.Id = previous.Id; profile.Name = previous.Name; profile.Person = previous.Person;
