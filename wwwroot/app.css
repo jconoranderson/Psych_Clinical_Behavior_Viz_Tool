@@ -493,12 +493,3 @@ rect[class*="medication-change-hit-"] { pointer-events: all; cursor: help; }
 .scip-tooltip-row + .scip-tooltip-row { border-top: 1px solid #edf0f3; }
 
 .navigator-window-input:disabled { cursor: default; pointer-events: none; }
-
-.saved-profiles { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; font-size:0.8rem; }
-.saved-profiles select, .saved-profiles button, .profile-editor input:not([type=checkbox]) { padding:5px 8px; border:1px solid #cbd2d9; border-radius:5px; background:white; color:#263238; font:inherit; }
-.saved-profiles button:disabled { opacity:0.45; cursor:default; }
-.saved-profiles button:not(:disabled) { cursor:pointer; }
-.saved-profiles select { max-width:300px; }
-.profile-hint { color:#697680; }
-.profile-editor { display:flex; flex-wrap:wrap; align-items:center; gap:8px; width:100%; }
-.profile-message { width:100%; color:#455a64; }

@@ -224,10 +224,6 @@
                 </MudStack>
             </MudStack>
 
-            <SavedProfiles Person="@(_parsedWorkbook?.StudentInfoName ?? _selectedResident)"
-                           Enabled="@(_variableSelector != null && _viewModel?.AvailableTargets.Count > 0)"
-                           Capture="CaptureProfile" OnApply="ApplyProfile" />
-
             @* --- Toolbar Row 2: Aggregation + Shifts | Overlays | ID Select + Dates --- *@
             <div class="dashboard-toolbar">
 

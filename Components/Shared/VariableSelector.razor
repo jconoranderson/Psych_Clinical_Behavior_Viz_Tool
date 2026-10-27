@@ -202,25 +202,6 @@
         return _targetStates[target];
     }
 
-    public void ApplyProfileVariables(ViewProfile profile)
-    {
-        foreach (var target in AvailableTargets)
-        {
-            var state = GetTargetState(target);
-            state.Visible = profile.Behaviors.TryGetValue(target, out var saved) && saved.Visible;
-            if (saved != null && System.Text.RegularExpressions.Regex.IsMatch(saved.Color, "^#[0-9a-fA-F]{6}$"))
-                state.Color = saved.Color;
-        }
-        _hiddenMedications.Clear();
-        foreach (var med in AvailableMedications)
-        {
-            if (!profile.Medications.TryGetValue(med, out var saved) || !saved.Visible)
-                _hiddenMedications.Add(med);
-            if (saved != null && System.Text.RegularExpressions.Regex.IsMatch(saved.Color, "^#[0-9a-fA-F]{6}$"))
-                _medicationColors[med] = saved.Color;
-        }
-    }
-
     public bool IsTargetVisible(string target) => GetTargetState(target).Visible;
     public string GetTargetColor(string target) => GetTargetState(target).Color;
 
