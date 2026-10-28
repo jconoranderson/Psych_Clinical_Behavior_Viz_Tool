@@ -136,6 +136,10 @@ window.chartExport = {
         const stage = document.createElement('div');
         stage.className = 'pdf-chart-export';
         stage.style.cssText = `position:absolute;left:0;top:0;width:${bounds.width + 8}px;padding:4px;box-sizing:border-box;background:#fff;color:#263238;z-index:-1;font-family:Arial,sans-serif;`;
+        const chartTitle = document.createElement('h2');
+        chartTitle.textContent = exportTitle || summary.resident || 'Behavior History';
+        chartTitle.style.cssText = 'margin:0;padding:8px 16px 16px;text-align:center;font-size:24px;line-height:1.3;font-weight:600;overflow-wrap:anywhere;';
+        stage.appendChild(chartTitle);
         const legend = document.createElement('div');
         legend.style.cssText = 'display:block;text-align:center;padding:0 0 12px;font-size:14px;line-height:24px;';
         const behaviorLegend = document.createElement('div');
