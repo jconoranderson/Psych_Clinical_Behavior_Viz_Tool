@@ -19,10 +19,10 @@ It is intended to run behind IIS on a 64-bit Windows Server.
 
 ## Deploy the package
 
-1. Extract the ZIP to a versioned directory such as:
+1. Copy the published folder contents to a versioned directory such as:
 
    ```text
-   C:\Apps\PsychDashboard\releases\2026-09-30
+   C:\Apps\PsychDashboard\releases\1.3.1
    ```
 
 2. Create an IIS application pool:
@@ -32,7 +32,7 @@ It is intended to run behind IIS on a 64-bit Windows Server.
    - Enable 32-bit applications: **False**
    - Identity: a dedicated least-privilege service account
 
-3. Point the IIS site/application at the extracted directory.
+3. Point the IIS site/application at the published directory.
 4. Give the application-pool identity read/execute access to the application
    directory. Give it read access to configured warehouse CSV locations only
    if Data Warehouse mode will be enabled.
@@ -84,7 +84,7 @@ Then register this redirect URI with the identity provider:
 https://psych-dashboard.example.org/signin-oidc
 ```
 
-Never commit the client secret or place it in the deployment ZIP.
+Never commit the client secret or place it in the deployment package.
 
 The application refuses to start only when authentication is explicitly enabled
 but `Authentication__Authority` or `Authentication__ClientId` is missing.
