@@ -2983,20 +2983,21 @@
             _options.Tooltip.Custom = stackedBarTooltip;
         }
 
-        // 1. Behavior Axis templates
-        var globalMax = 10m;
-        if (ChartBehaviorCounts.Any())
-        {
-            var maxVal = ChartBehaviorCounts.Max(x => _yAxisMetric == YAxisMetric.Rate ? (decimal)x.Rate : x.Count);
-            if (_yAxisMetric == YAxisMetric.Rate)
-            {
-                globalMax = maxVal > 0 ? maxVal * 1.1m : 1m;
-            }
-            else
-            {
-                globalMax = Math.Max(10m, Math.Ceiling(maxVal * 1.1m)); // 10% padding
-            }
-        }
+        // Scale only the selected behaviors in the displayed date window. The
+        // mounted series retain full history for navigation, including hidden targets.
+        var selectedTargets = VisibleTargets.ToHashSet();
+        var axisStart = GetAggregatePeriodStart((_startDate ?? _dateRange?.Start ?? xMinDate).Date);
+        var axisEnd = (_endDate ?? _dateRange?.End ?? xMaxDate).Date;
+        var maxVal = ChartBehaviorCounts
+            .Where(point => selectedTargets.Contains(point.Target) && point.HasData &&
+                (_selectedPeriod == AggregationPeriod.Average ||
+                 (point.Date >= axisStart && point.Date.Date <= axisEnd)))
+            .Select(point => _yAxisMetric == YAxisMetric.Rate ? (decimal)point.Rate : point.Count)
+            .DefaultIfEmpty(0m)
+            .Max();
+        var globalMax = _yAxisMetric == YAxisMetric.Rate
+            ? (maxVal > 0 ? maxVal * 1.1m : 1m)
+            : Math.Max(5m, Math.Ceiling(maxVal * 1.1m));
 
         // Five evenly spaced intervals with integer steps for episode counts.
         if (_yAxisMetric == YAxisMetric.Frequency)

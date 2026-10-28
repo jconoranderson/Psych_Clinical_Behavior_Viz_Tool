@@ -110,6 +110,48 @@ public sealed class WorkbookChartRefreshTests
         Assert.Equal(0m, (decimal)axis.Max % 5);
     }
 
+    [Theory]
+    [InlineData(YAxisMetric.Frequency)]
+    [InlineData(YAxisMetric.Rate)]
+    public async Task BehaviorAxisFitsSelectedTargetsAndDateWindow(YAxisMetric metric)
+    {
+        using var page = new Home();
+        typeof(Home).GetProperty("PatientHistoryService", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(page, new PatientHistoryService(null!, new ConfigurationBuilder().Build()));
+        var large = Workbook(2025, "Large");
+        large.Behaviors.ForEach(row => row.Episode_Count = 100);
+        var small = Workbook(2025, "Small");
+        var history = Workbook(2024, "Small");
+        history.Behaviors.ForEach(row => row.Episode_Count = 1000);
+        Set(page, "_parsedWorkbook", WorkbookMergeService.Merge(large, new[] { small, history }));
+        Set(page, "_selectedPeriod", AggregationPeriod.Month);
+        Set(page, "_yAxisMetric", metric);
+        await LoadDefaultWindow(page, true);
+        var selector = new VariableSelector();
+        Set(page, "_variableSelector", selector);
+
+        decimal AxisMax()
+        {
+            Invoke(page, "BuildChartOptions");
+            return (decimal)Get<ApexCharts.ApexChartOptions<DailyBehaviorCount>>(page, "_options").Yaxis[0].Max;
+        }
+
+        var fullHistoryMax = AxisMax();
+        Set(page, "_startDate", new DateTime(2025, 1, 1));
+        Set(page, "_endDate", new DateTime(2025, 1, 31));
+        var bothSelectedMax = AxisMax();
+        Assert.True(bothSelectedMax < fullHistoryMax);
+        selector.GetTargetState("Large").Visible = false;
+        var smallOnlyMax = AxisMax();
+        Assert.True(smallOnlyMax < bothSelectedMax);
+        Assert.InRange(smallOnlyMax, 1m, 5m);
+        selector.GetTargetState("Large").Visible = true;
+        Assert.Equal(bothSelectedMax, AxisMax());
+        selector.GetTargetState("Large").Visible = false;
+        selector.GetTargetState("Small").Visible = false;
+        Assert.True(AxisMax() > 0);
+    }
+
     [Fact]
     public async Task PdfSummaryUsesSelectedDaysIncludingEndOfFinalMonth()
     {
